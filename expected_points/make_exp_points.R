@@ -150,6 +150,7 @@ calc_koff_info <- function(play_row, plays_df){
         buffer <- buffer + 1
     }
     )
+    try(
     if (play_before_kickoff$pts == 0){
       print(plays_df %>% 
               filter(pid < playrow$pid + 15, pid > play_row$pid - 15)) %>%
@@ -159,8 +160,8 @@ calc_koff_info <- function(play_row, plays_df){
     } else {
       missed_fg <- FALSE
     }
+    )
   }
-  # browser()
   first_down_after_kickoff <- plays_df %>%
     dplyr::filter(pid > last_kickoff$pid &
                     pid <= play_row$pid) %>%
@@ -215,7 +216,8 @@ calc_koff_info <- function(play_row, plays_df){
       }
     }
   }
-  kickoff_info <- c(kickoff_dummy, kickoff_type)
+  # browser()
+  (kickoff_info <- c(kickoff_dummy, kickoff_type))
 }
 
 calc_net_scores <- function(play_row, off_of_int){
