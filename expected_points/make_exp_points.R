@@ -168,7 +168,7 @@ reset_and_koff_stats <- function(play_row, plays_df){
   } else {
     if (play_row$pid != first_down_after_kickoff$pid){
       kickoff_dummy <- 0
-      kickoff_type <- NA
+      kickoff_type <- "NA"
     } else {
       kickoff_dummy <- 1
       if (last_kickoff$pid == first_kickoff_of_half$pid){
@@ -201,7 +201,14 @@ reset_and_koff_stats <- function(play_row, plays_df){
   #   print(kickoff_info)
   #   browser()
   # }
-  (append(net_score_info, kickoff_info))
+  all_info <- append(net_score_info, kickoff_info)
+  if (length(all_info) != 7){
+    browser() 
+  }
+  if (all(is.null(all_info))){
+    browser()
+  }
+  all_info
 }
 
 calc_net_scores <- function(play_row, off_of_int){
@@ -233,19 +240,19 @@ make_raw_exp_scores_table <- function(test = FALSE, plays_df){
          def != off,
          gid <= gid_stop) %>%
     dplyr::select(seas, wk, gid, pid, qtr, min_in_game, min_in_half, min, sec, h, ptso, ptsd, off, def, yfog, dseq)
-  # browser()
+  
   first_and_tens <- first_and_tens %>%
-    dplyr::mutate(drive_start = ifelse(dseq == 1, 1, 0)) %>%
     by_row(reset_and_koff_stats, plays_df = plays_df, .collate = "cols",
-           .to = "ex_score_info")  %>%
-    dyplr::rename(net_score_to_half = ex_score_info1,
+           .to = "ex_score_info") %>%
+    dplyr::rename(net_score_to_half = ex_score_info1,
            net_score_to_reset = ex_score_info2,
            time_to_reset = ex_score_info4,
            reset_min_in_half = ex_score_info3) %>%
     dplyr::mutate(reset_min_in_game = ifelse(qtr %in% c(1, 2), 30 + reset_min_in_half,
                                       ifelse(qtr %in% c(3, 4), reset_min_in_half,
                                              NA)),
-           Playoff = ifelse(wk >= 17, 1, 0))
+           Playoff = ifelse(wk >= 17, 1, 0)) %>%
+    dplyr::mutate(drive_start = ifelse(dseq == 1, 1, 0)) %>%
   first_and_tens
 }
 
@@ -295,7 +302,7 @@ make_off_won_binary <- function(row, plays = plays_df){
   }
 }
 
-first_and_tens <- make_raw_exp_scores_table(TRUE, plays_df) %>%
+first_and_tens <- make_raw_exp_scores_table(FALSE, plays_df) %>%
   by_row(convert_reset_time, .collate = "cols", .to = "reset_time_info") %>% 
   by_row(make_off_won_binary, .collate = "cols", .to = "Offense_Won") %>%
   rename(# Time variables
