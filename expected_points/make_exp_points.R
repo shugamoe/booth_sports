@@ -27,9 +27,7 @@ plays_df <- read_csv('nfl_00_16/PLAY.csv') %>%
  merge(games_df, ., by = 'gid')
  plays_df$min_in_half <- as.numeric(plays_df$min_in_half)
 
-reset_and_koff_stats <- function(play_row, plays_df){
-  print(play_row$pid)
-  
+calc_net_score_info <- function(play_row, plays_df){
   # Get the current play, and all future plays within the same game that are in
   # the same half of the game.
   search_df <- plays_df %>%
@@ -104,11 +102,11 @@ reset_and_koff_stats <- function(play_row, plays_df){
   }
   
   net_till_half_score <- sum(search_df$net_score)
-  net_score_info <- c(net_till_half_score, net_till_reset_score, reset_min_in_half, time_to_reset, Reset_Team_to_Score)
-  # if (length(net_score_info) != 5){
-  #   browser()
-  # }
-  
+  (net_score_info <- c(net_till_half_score, net_till_reset_score, reset_min_in_half, time_to_reset, Reset_Team_to_Score))
+}
+
+calc_koff_info <- function(play_row, plays_df){
+  print(play_row$pid)
   # Create dummy for 1st and 10 following a kickoff and the kickoff typeg
   if (play_row$qtr %in% c(1, 2)){
     half <- 1
@@ -122,7 +120,7 @@ reset_and_koff_stats <- function(play_row, plays_df){
     dplyr::filter(pid < play_row$pid & 
             qtr %in% play_half, gid == play_row$gid)
   kickoffs_before <- plays_before %>%
-    dplyr::filter(type %in% c("KOFF"))
+    dplyr::filter(type %in% c("KOFF", "ONSD"))
   
   last_kickoff <- tail(kickoffs_before, 1)
   plays_after_kickoff <- plays_df %>%
@@ -157,7 +155,7 @@ reset_and_koff_stats <- function(play_row, plays_df){
   
   first_kickoff_of_half <- plays_df %>%
     filter(qtr %in% play_half,
-           type == "KOFF") %>%
+           type %in% c("KOFF", "ONSD")) %>%
     head(1)
   
   # if (play_row$pid == 168){
@@ -194,17 +192,7 @@ reset_and_koff_stats <- function(play_row, plays_df){
     }
   }
   kickoff_info <- c(kickoff_dummy, kickoff_type)
-  # if (!is.na(kickoff_type)){
-  #   print(plays_df %>%
-  #           filter(gid == play_row$gid,
-  #                  pid <= play_row$pid + 5 & pid >= play_row$pid - 5) %>%
-  #           dplyr::select(qtr, pid, pts, type)
-  #   )
-  #   print(sprintf("pid: %s", play_row$pid))
-  #   print(kickoff_info)
-  #   browser()
-  # }
-  (all_info <- append(net_score_info, kickoff_info))
+  
 }
 
 calc_net_scores <- function(play_row, off_of_int){
@@ -225,7 +213,7 @@ calc_net_scores <- function(play_row, off_of_int){
 make_raw_exp_scores_table <- function(test = FALSE, plays_df){
   force(plays_df)
   if (test){
-    gid_stop <- 2
+    gid_stop <- 3
   } else {
     gid_stop <- Inf
   }
@@ -238,8 +226,10 @@ make_raw_exp_scores_table <- function(test = FALSE, plays_df){
          type %in% c("PASS", "RUSH", "NOPL")) %>%
     dplyr::select(seas, wk, gid, pid, qtr, min_in_game, min_in_half, min, sec, h, ptso, ptsd, off, def, yfog, dseq, type)
   first_and_tens <- first_and_tens %>%
-    by_row(reset_and_koff_stats, plays_df = plays_df, .collate = "cols",
+    by_row(calc_net_score_info, plays_df = plays_df, .collate = "cols",
            .to = "ex_score_info") %>%
+    by_row(calc_koff_info, plays_df = plays_df, .collate = "cols",
+           .to = "koff_info") %>%
     dplyr::rename(net_score_to_half = ex_score_info1,
            net_score_to_reset = ex_score_info2,
            time_to_reset = ex_score_info4,
@@ -300,7 +290,7 @@ make_off_won_binary <- function(row, plays = plays_df){
   }
 }
 
-first_and_tens <- make_raw_exp_scores_table(test = FALSE, plays_df = plays_df) %>%
+first_and_tens <- make_raw_exp_scores_table(test = TRUE, plays_df = plays_df) %>%
   by_row(convert_reset_time, .collate = "cols", .to = "reset_time_info") %>% 
   rename(# Time variables
          Reset_qtr = reset_time_info1,
@@ -330,8 +320,8 @@ first_and_tens <- make_raw_exp_scores_table(test = FALSE, plays_df = plays_df) %
          Min_Reset_to_Half = reset_min_in_half,
          Min_Reset_to_GameEnd = reset_min_in_game,
          Reset_Team_to_Score = ex_score_info5,
-         Follow_Kickoff = ex_score_info6,
-         Kickoff_Type = ex_score_info7 
+         Follow_Kickoff = koff_info1,
+         Kickoff_Type = koff_info2
          ) %>%
   by_row(make_off_won_binary, .collate = "cols", .to = "Offense_Won") %>%
   dplyr::select(
