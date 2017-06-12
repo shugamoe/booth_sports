@@ -27,3 +27,4 @@ Min_Reset_to_Half: The time remaining in the half when the reset play occurred
 Min_Reset_to_GameEnd: The time remaining in the game when the reset play occurred
 Follow_Kickoff: Is this 1st and 10 (or goal) the first one following a kickoff?
 Kickoff_Type: If it did follow a kickoff, did the kickoff come after a FG, TD, or the 1STHF or 2NDHF, or none (NA)?
+Offense_Won: Did the offense of this current 1st and 10 (or goal) win the game?
