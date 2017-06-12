@@ -135,6 +135,9 @@ calc_koff_info <- function(play_row, plays_df){
     # If this is the case, since we are using the `pts` variable to see what type
     # of score it was (if any), we must find the original touchdown play to make
     # sure that we see that 6, 7, or 8 points are scored further down.
+    if (play_before_kickoff$type == "FGXP" && play_before_kickoff$pts == 0){
+      maybe_field_goal <- play_before_kickoff 
+    }
     buffer <- 2
     try( # It's possible that if there's a penalty before the kickoff at the beginning of the game 
       # that this can break, we simply let it break, and the stuff ahead appropriately marks
@@ -147,7 +150,17 @@ calc_koff_info <- function(play_row, plays_df){
         buffer <- buffer + 1
     }
     )
+    if (play_before_kickoff$pts == 0){
+      print(plays_df %>% 
+              filter(pid < playrow$pid + 15, pid > play_row$pid - 15)) %>%
+              dplyr::select(qtr, type, pts, pid) 
+      missed_fg <- TRUE
+      return(c("True", "FG")) # Special case for missed field goal
+    } else {
+      missed_fg <- FALSE
+    }
   }
+  # browser()
   first_down_after_kickoff <- plays_df %>%
     dplyr::filter(pid > last_kickoff$pid &
                     pid <= play_row$pid) %>%
@@ -161,7 +174,8 @@ calc_koff_info <- function(play_row, plays_df){
   
   first_kickoff_of_half <- plays_df %>%
     filter(qtr %in% play_half,
-           type %in% c("KOFF", "ONSD")) %>%
+           type %in% c("KOFF", "ONSD"),
+           gid == play_row$gid) %>%
     head(1)
   
   if (nrow(play_before_kickoff) == 0){
