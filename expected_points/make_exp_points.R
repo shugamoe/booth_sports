@@ -130,13 +130,16 @@ calc_koff_info <- function(play_row, plays_df){
     dplyr::filter(pid == last_kickoff$pid - 1) %>%
     head(1)
   
-  
+  browser()
   if (nrow(play_before_kickoff) != 0){ # Only do if kickoff doesn't start half.
     # It's possible the last play before a kickoff is the extra point or conversion.
     # If this is the case, since we are using the `pts` variable to see what type
     # of score it was (if any), we must find the original touchdown play to make
     # sure that we see that 6, 7, or 8 points are scored further down.
     buffer <- 2
+    try( # It's possible that if there's a penalty before the kickoff at the beginning of the game 
+      # that this can break, we simply let it break, and the stuff ahead appropriately marks
+      # the kickoff as a first or second half one.
     while (play_before_kickoff$type %in% c("FGXP", "CONV", "NOPL") && 
            play_before_kickoff$pts == 0){
         play_before_kickoff <- plays_before %>%
@@ -144,6 +147,7 @@ calc_koff_info <- function(play_row, plays_df){
           head(1)
         buffer <- buffer + 1
     }
+    )
   }
   first_down_after_kickoff <- plays_df %>%
     dplyr::filter(pid > last_kickoff$pid &
@@ -200,7 +204,6 @@ calc_koff_info <- function(play_row, plays_df){
     }
   }
   kickoff_info <- c(kickoff_dummy, kickoff_type)
-  
 }
 
 calc_net_scores <- function(play_row, off_of_int){
