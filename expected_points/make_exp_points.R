@@ -195,8 +195,8 @@ calc_koff_info <- function(play_row, plays_df){
           kickoff_type <- "FG"
         } else if (pts %in% c(6, 7, 8)){
           kickoff_type <- "TD"
-        } else {
-          # browser()
+        } else if (pts == 2){
+          kickoff_type <- "S"
         }
       }
     }
