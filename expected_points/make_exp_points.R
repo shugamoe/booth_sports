@@ -234,17 +234,17 @@ make_raw_exp_scores_table <- function(test = FALSE, plays_df){
          ytg == 10 | yfog > 90,
          qtr %in% c(1, 2, 3, 4),
          def != off,
-         gid <= gid_stop,
-         type %in% c("PASS", "RUSH")) %>%
-    dplyr::select(seas, wk, gid, pid, qtr, min_in_game, min_in_half, min, sec, h, ptso, ptsd, off, def, yfog, dseq)
+         gid < gid_stop,
+         type %in% c("PASS", "RUSH", "NOPL")) %>%
+    dplyr::select(seas, wk, gid, pid, qtr, min_in_game, min_in_half, min, sec, h, ptso, ptsd, off, def, yfog, dseq, type)
   first_and_tens <- first_and_tens %>%
-    dplyr::mutate(drive_start = ifelse(dseq == 1, 1, 0)) %>%
     by_row(reset_and_koff_stats, plays_df = plays_df, .collate = "cols",
            .to = "ex_score_info") %>%
     dplyr::rename(net_score_to_half = ex_score_info1,
            net_score_to_reset = ex_score_info2,
            time_to_reset = ex_score_info4,
            reset_min_in_half = ex_score_info3) %>%
+    dplyr::mutate(drive_start = ifelse(dseq == 1, 1, 0)) %>%
     mutate_at(.vars = c("net_score_to_half", "net_score_to_reset",
                 "time_to_reset", "reset_min_in_half"), .funs = as.numeric) %>%
     dplyr::mutate(reset_min_in_game = ifelse(qtr %in% c(1, 2), 30 + reset_min_in_half,
@@ -300,7 +300,7 @@ make_off_won_binary <- function(row, plays = plays_df){
   }
 }
 
-first_and_tens <- make_raw_exp_scores_table(test = TRUE, plays_df = plays_df) %>%
+first_and_tens <- make_raw_exp_scores_table(test = FALSE, plays_df = plays_df) %>%
   by_row(convert_reset_time, .collate = "cols", .to = "reset_time_info") %>% 
   rename(# Time variables
          Reset_qtr = reset_time_info1,
