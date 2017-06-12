@@ -129,17 +129,19 @@ calc_koff_info <- function(play_row, plays_df){
     dplyr::filter(pid == max(last_kickoff$pid - 1, 1)) %>%
     head(1)
   
+  
   if (nrow(play_before_kickoff) != 0){ # Only do if kickoff doesn't start half.
     # It's possible the last play before a kickoff is the extra point or conversion.
     # If this is the case, since we are using the `pts` variable to see what type
     # of score it was (if any), we must find the original touchdown play to make
-    # sure that we see that 6  or 7 points are scored further down.
+    # sure that we see that 6, 7, or 8 points are scored further down.
     buffer <- 2
-    while (play_before_kickoff$type %in% c("FGXP", "CONV") && 
-           play_before_kickoff$pts != 3){
+    while (play_before_kickoff$type %in% c("FGXP", "CONV", "NOPL") && 
+           play_before_kickoff$pts == 0){
         play_before_kickoff <- plays_before %>%
           dplyr::filter(pid == max(last_kickoff$pid - buffer, 1)) %>%
           head(1)
+        buffer <- buffer + 1
     }
   }
   first_down_after_kickoff <- plays_df %>%
@@ -183,7 +185,7 @@ calc_koff_info <- function(play_row, plays_df){
         pts <- abs(play_before_kickoff$pts)
         if (pts == 3){
           kickoff_type <- "FG"
-        } else if (pts %in% c(6, 7)){
+        } else if (pts %in% c(6, 7, 8)){
           kickoff_type <- "TD"
         } else {
           # browser()
@@ -213,7 +215,7 @@ calc_net_scores <- function(play_row, off_of_int){
 make_raw_exp_scores_table <- function(test = FALSE, plays_df){
   force(plays_df)
   if (test){
-    gid_stop <- 3
+    gid_stop <- 5
   } else {
     gid_stop <- Inf
   }
@@ -226,10 +228,10 @@ make_raw_exp_scores_table <- function(test = FALSE, plays_df){
          type %in% c("PASS", "RUSH", "NOPL")) %>%
     dplyr::select(seas, wk, gid, pid, qtr, min_in_game, min_in_half, min, sec, h, ptso, ptsd, off, def, yfog, dseq, type)
   first_and_tens <- first_and_tens %>%
-    by_row(calc_net_score_info, plays_df = plays_df, .collate = "cols",
-           .to = "ex_score_info") %>%
     by_row(calc_koff_info, plays_df = plays_df, .collate = "cols",
            .to = "koff_info") %>%
+    by_row(calc_net_score_info, plays_df = plays_df, .collate = "cols",
+           .to = "ex_score_info") %>%
     dplyr::rename(net_score_to_half = ex_score_info1,
            net_score_to_reset = ex_score_info2,
            time_to_reset = ex_score_info4,
