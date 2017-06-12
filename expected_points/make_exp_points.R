@@ -130,7 +130,6 @@ calc_koff_info <- function(play_row, plays_df){
     dplyr::filter(pid == last_kickoff$pid - 1) %>%
     head(1)
   
-  browser()
   if (nrow(play_before_kickoff) != 0){ # Only do if kickoff doesn't start half.
     # It's possible the last play before a kickoff is the extra point or conversion.
     # If this is the case, since we are using the `pts` variable to see what type
@@ -184,7 +183,6 @@ calc_koff_info <- function(play_row, plays_df){
     } else {
       kickoff_dummy <- "True"
       if (last_kickoff$pid == first_kickoff_of_half$pid){
-        browser()
         if (half == 1){
           kickoff_type <- "1STHF"
         } else if (half == 2){
@@ -301,6 +299,7 @@ make_off_won_binary <- function(play_row, plays = plays_df){
   } else if (cur_off == final_play$def){
     return(ifelse(final_play$ptsd > final_play$ptso, 1, 0))
   } else{
+    print(final_play)
     browser() 
   }
 }
