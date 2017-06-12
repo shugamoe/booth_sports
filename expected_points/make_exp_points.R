@@ -103,9 +103,9 @@ reset_and_koff_stats <- function(play_row, plays_df){
   
   net_till_half_score <- sum(search_df$net_score)
   net_score_info <- c(net_till_half_score, net_till_reset_score, reset_min_in_half, time_to_reset, Reset_Team_to_Score)
-  if (length(net_score_info) != 5){
-    browser()
-  }
+  # if (length(net_score_info) != 5){
+  #   browser()
+  # }
   
   # Create dummy for 1st and 10 following a kickoff and the kickoff typeg
   if (play_row$qtr %in% c(1, 2)){
@@ -185,22 +185,22 @@ reset_and_koff_stats <- function(play_row, plays_df){
         } else if (pts %in% c(6, 7)){
           kickoff_type <- "TD"
         } else {
-          browser()
+          # browser()
         }
       }
     }
   }
   kickoff_info <- c(kickoff_dummy, kickoff_type)
-  if (!is.na(kickoff_type)){
-    print(plays_df %>%
-            filter(gid == play_row$gid,
-                   pid <= play_row$pid + 5 & pid >= play_row$pid - 5) %>%
-            dplyr::select(qtr, pid, pts, type)
-    )
-    print(sprintf("pid: %s", play_row$pid))
-    print(kickoff_info)
-    browser()
-  }
+  # if (!is.na(kickoff_type)){
+  #   print(plays_df %>%
+  #           filter(gid == play_row$gid,
+  #                  pid <= play_row$pid + 5 & pid >= play_row$pid - 5) %>%
+  #           dplyr::select(qtr, pid, pts, type)
+  #   )
+  #   print(sprintf("pid: %s", play_row$pid))
+  #   print(kickoff_info)
+  #   browser()
+  # }
   (append(net_score_info, kickoff_info))
 }
 
