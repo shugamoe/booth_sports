@@ -164,7 +164,7 @@ calc_koff_info <- function(play_row, game_tracker){
     try(
     if (play_before_kickoff$pts == 0){
       print(cur_game_plays %>% 
-              filter(pid < playrow$pid + 15, pid > play_row$pid - 15)) %>%
+              filter(pid < play_row$pid + 15, pid > play_row$pid - 15)) %>%
               dplyr::select(qtr, type, pts, pid) 
       missed_fg <- TRUE
       return(c("True", "FG")) # Special case for missed field goal
