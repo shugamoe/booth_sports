@@ -3,6 +3,7 @@ library(purrrlyr)
 library(dplyr)
 library(readr)
 library(MASS)
+library(purrr)
 
 calc_min_in_half <- function(play_row){
   qtr <- play_row$qtr
@@ -17,23 +18,31 @@ calc_min_in_half <- function(play_row){
   }
 }
 
-games_df <- read_csv('nfl_00_16/GAME.csv') %>%
+GAMES_DF <- read_csv('nfl_00_16/GAME.csv') %>%
   dplyr::select(gid, h, seas, wk)
-plays_df <- read_csv('nfl_00_16/PLAY.csv') %>%
+PLAYS_DF <- read_csv('nfl_00_16/PLAY.csv') %>%
  mutate(min_in_half = ifelse(qtr %in% c(2, 4), min + sec / 60,
                              ifelse(qtr %in% c(1,3),     # -100 shouldn't happen
                                     15 + min + sec / 60, -100)),
         min_in_game = ifelse(qtr %in% c(3,4), min_in_half, 
                              ifelse(qtr %in% c(1, 2), 30 + min_in_half, -1))) %>% # Not using overtime
- merge(games_df, ., by = 'gid')
- plays_df$min_in_half <- as.numeric(plays_df$min_in_half)
+ merge(GAMES_DF, ., by = 'gid')
+ PLAYS_DF$min_in_half <- as.numeric(PLAYS_DF$min_in_half)
+ 
+extract_game_plays_df <- function(plays_df, game_id){
+  (plays_df %>% filter(gid == game_id))
+}
 
-calc_net_score_info <- function(play_row, plays_df){
+# Function to make calculations more efficient; stores dataframes for each game
+GAME_TRACKER <- sort(unique(PLAYS_DF$gid)) %>%
+ map(~ extract_game_plays_df(plays_df = PLAYS_DF,  game_id = .))
+
+calc_net_score_info <- function(play_row, game_tracker){
   # Get the current play, and all future plays within the same game that are in
   # the same half of the game.
-  search_df <- plays_df %>%
-    dplyr::filter(gid == play_row$gid,
-           pid >= play_row$pid,
+  cur_game_plays <- game_tracker[[play_row$gid]] # Extract current game df
+  search_df <- cur_game_plays %>%
+    dplyr::filter(pid >= play_row$pid,
            (qtr == play_row$qtr) | 
              (qtr == ifelse(play_row$qtr %in% c(1, 3), play_row$qtr + 1, 
                             play_row$qtr))) %>%
@@ -106,7 +115,7 @@ calc_net_score_info <- function(play_row, plays_df){
   (net_score_info <- c(net_till_half_score, net_till_reset_score, reset_min_in_half, time_to_reset, Reset_Team_to_Score))
 }
 
-calc_koff_info <- function(play_row, plays_df){
+calc_koff_info <- function(play_row, game_tracker){
   print(play_row$pid)
   # Create dummy for 1st and 10 following a kickoff and the kickoff typeg
   if (play_row$qtr %in% c(1, 2)){
@@ -117,14 +126,16 @@ calc_koff_info <- function(play_row, plays_df){
     play_half <- c(3, 4)
   }
   
-  plays_before <- plays_df %>%
-    dplyr::filter(pid < play_row$pid & 
-            qtr %in% play_half, gid == play_row$gid)
+  cur_game_plays <- game_tracker[[play_row$gid]]
+  plays_before <- cur_game_plays %>%
+    dplyr::filter(qtr %in% play_half,
+                  pid < play_row$pid)
+  
   kickoffs_before <- plays_before %>%
     dplyr::filter(type %in% c("KOFF", "ONSD"))
   
   last_kickoff <- tail(kickoffs_before, 1)
-  plays_after_kickoff <- plays_df %>%
+  plays_after_kickoff <- cur_game_plays %>%
     dplyr::filter(pid > last_kickoff$pid)
   play_before_kickoff <- plays_before %>%
     dplyr::filter(pid == last_kickoff$pid - 1) %>%
@@ -152,7 +163,7 @@ calc_koff_info <- function(play_row, plays_df){
     )
     try(
     if (play_before_kickoff$pts == 0){
-      print(plays_df %>% 
+      print(cur_game_plays %>% 
               filter(pid < playrow$pid + 15, pid > play_row$pid - 15)) %>%
               dplyr::select(qtr, type, pts, pid) 
       missed_fg <- TRUE
@@ -162,7 +173,7 @@ calc_koff_info <- function(play_row, plays_df){
     }
     )
   }
-  first_down_after_kickoff <- plays_df %>%
+  first_down_after_kickoff <- cur_game_plays %>%
     dplyr::filter(pid > last_kickoff$pid &
                     pid <= play_row$pid) %>%
     dplyr::filter(dwn == 1,
@@ -173,12 +184,12 @@ calc_koff_info <- function(play_row, plays_df){
              ) %>%
     head(1)
   
-  first_kickoff_of_half <- plays_df %>%
+  first_kickoff_of_half <- cur_game_plays %>%
     filter(qtr %in% play_half,
            type %in% c("KOFF", "ONSD"),
            gid == play_row$gid) %>%
     head(1)
-  
+  # browser() 
   if (nrow(play_before_kickoff) == 0){
     if (play_row$pid != first_down_after_kickoff$pid){
       kickoff_dummy <- "False"
@@ -236,7 +247,6 @@ calc_net_scores <- function(play_row, off_of_int){
 }
 
 make_raw_exp_scores_table <- function(test = FALSE, plays_df){
-  force(plays_df)
   if (test){
     gid_stop <- 5
   } else {
@@ -251,10 +261,10 @@ make_raw_exp_scores_table <- function(test = FALSE, plays_df){
          type %in% c("PASS", "RUSH", "NOPL")) %>%
     dplyr::select(seas, wk, gid, pid, qtr, min_in_game, min_in_half, min, sec, h, ptso, ptsd, off, def, yfog, dseq, type)
   first_and_tens <- first_and_tens %>%
-    by_row(calc_koff_info, plays_df = plays_df, .collate = "cols",
+    by_row(calc_koff_info, game_tracker = GAME_TRACKER, .collate = "cols",
            .to = "koff_info") %>%
     mutate(koff_info1 = ifelse(koff_info1 == "True", 1, 0)) %>%
-    by_row(calc_net_score_info, plays_df = plays_df, .collate = "cols",
+    by_row(calc_net_score_info, game_tracker = GAME_TRACKER, .collate = "cols",
            .to = "ex_score_info") %>%
     dplyr::rename(net_score_to_half = ex_score_info1,
            net_score_to_reset = ex_score_info2,
@@ -301,12 +311,11 @@ convert_reset_time <- function(row){
   (reset_time_info <- c(qtr, qtr_min, qtr_sec))
 }
 
-make_off_won_binary <- function(play_row, plays = plays_df){
+make_off_won_binary <- function(play_row, game_tracker = GAME_TRACKER){
   print(sprintf("making binary for pid: %d", play_row$pid))
   cur_game <- play_row$gid 
   cur_off <- play_row$off  
-  search_df <- plays %>%
-    dplyr::filter(gid == cur_game)
+  search_df <- game_tracker[[cur_game]] 
   
   final_play <- tail(search_df, 1)
   
@@ -320,7 +329,7 @@ make_off_won_binary <- function(play_row, plays = plays_df){
   }
 }
 
-first_and_tens <- make_raw_exp_scores_table(test = TRUE, plays_df = plays_df) %>%
+first_and_tens <- make_raw_exp_scores_table(test = TRUE, plays_df = PLAYS_DF) %>%
   by_row(convert_reset_time, .collate = "cols", .to = "reset_time_info") %>% 
   by_row(make_off_won_binary, .collate = "cols", .to = "Offense_Won") %>%
   rename(# Time variables
