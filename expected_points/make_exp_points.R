@@ -40,6 +40,7 @@ GAME_TRACKER <- sort(unique(PLAYS_DF$gid)) %>%
 calc_net_score_info <- function(play_row, game_tracker){
   # Get the current play, and all future plays within the same game that are in
   # the same half of the game.
+  print(sprintf("Calc net score info for pid:", play_row$pid))
   cur_game_plays <- game_tracker[[play_row$gid]] # Extract current game df
   search_df <- cur_game_plays %>%
     dplyr::filter(pid >= play_row$pid,
@@ -116,7 +117,7 @@ calc_net_score_info <- function(play_row, game_tracker){
 }
 
 calc_koff_info <- function(play_row, game_tracker){
-  print(play_row$pid)
+  print(sprintf("Koff for pid: %d", play_row$pid))
   # Create dummy for 1st and 10 following a kickoff and the kickoff typeg
   if (play_row$qtr %in% c(1, 2)){
     half <- 1
@@ -248,7 +249,7 @@ calc_net_scores <- function(play_row, off_of_int){
 
 make_raw_exp_scores_table <- function(test = FALSE, plays_df){
   if (test){
-    gid_stop <- 5
+    gid_stop <- 3
   } else {
     gid_stop <- Inf
   }
@@ -280,9 +281,10 @@ make_raw_exp_scores_table <- function(test = FALSE, plays_df){
   first_and_tens
 }
 
-convert_reset_time <- function(row){
+convert_reset_time <- function(play_row){
+  print(sprintf("Converting Reset Time for pid: %d", play_row$pid))
   # browser()
-  full_time <- row$reset_min_in_game
+  full_time <- play_row$reset_min_in_game
   
   if (full_time > 45){
     qtr <- 1
@@ -331,7 +333,9 @@ make_off_won_binary <- function(play_row, game_tracker = GAME_TRACKER){
 
 first_and_tens <- make_raw_exp_scores_table(test = TRUE, plays_df = PLAYS_DF) %>%
   by_row(convert_reset_time, .collate = "cols", .to = "reset_time_info") %>% 
-  by_row(make_off_won_binary, .collate = "cols", .to = "Offense_Won") %>%
+  by_row(make_off_won_binary, .collate = "cols", .to = "Offense_Won")
+
+first_and_tens <- first_and_tens %>%
   rename(# Time variables
          Reset_qtr = reset_time_info1,
          Reset_min = reset_time_info2,
