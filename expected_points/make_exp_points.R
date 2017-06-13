@@ -396,3 +396,10 @@ first_and_tens <- make_raw_exp_scores_table(test = TRUE, plays_df = PLAYS_DF) %>
   Offense_Won)
 write_csv(first_and_tens, 'raw_fdowns_nscore_half_and_reset.csv')
 
+test_koff <- function(pid_of_int, plays_df = PLAYS_DF){
+  check_dat <- plays_df %>%
+    filter(pid < pid_of_int + 15,
+           pid > pid_of_int - 15) %>%
+    dplyr::select(pid, qtr, type, pts)
+  check_dat
+}
