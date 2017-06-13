@@ -397,7 +397,7 @@ first_and_tens <- first_and_tens %>%
   Min_Reset_to_GameEnd,
   Follow_Kickoff,
   Kickoff_Type,
-  Offense_Won)
+  Offense_Won) %>%
 write_csv(first_and_tens, 'raw_fdowns_nscore_half_and_reset.csv')
 
 test_koff <- function(pid_of_int, plays_df = PLAYS_DF){
