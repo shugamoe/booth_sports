@@ -117,6 +117,7 @@ calc_net_score_info <- function(play_row, game_tracker){
 }
 
 calc_koff_info <- function(play_row, game_tracker){
+  browser()
   print(sprintf("Koff for pid: %d", play_row$pid))
   # Create dummy for 1st and 10 following a kickoff and the kickoff typeg
   if (play_row$qtr %in% c(1, 2)){
@@ -131,6 +132,16 @@ calc_koff_info <- function(play_row, game_tracker){
   plays_before <- cur_game_plays %>%
     dplyr::filter(qtr %in% play_half,
                   pid < play_row$pid)
+  
+  if (nrow(plays_before == 0)){ # Special case in which case the kickoff that starts 1st or second half of game is not recorded
+    kickoff_dummy <- "True"
+    if (half == 1){
+      kickoff_type <- "1STHF"
+    } else {
+      kickoff_type <- "2NDHF"
+    }
+    return(c(kickoff_dummy, kickoff_type))
+  }
   
   kickoffs_before <- plays_before %>%
     dplyr::filter(type %in% c("KOFF", "ONSD"))
@@ -262,11 +273,11 @@ make_raw_exp_scores_table <- function(test = FALSE, plays_df){
          type %in% c("PASS", "RUSH", "NOPL")) %>%
     dplyr::select(seas, wk, gid, pid, qtr, min_in_game, min_in_half, min, sec, h, ptso, ptsd, off, def, yfog, dseq, type)
   first_and_tens <- first_and_tens %>%
+    by_row(calc_net_score_info, game_tracker = GAME_TRACKER, .collate = "cols",
+           .to = "ex_score_info") %>%
     by_row(calc_koff_info, game_tracker = GAME_TRACKER, .collate = "cols",
            .to = "koff_info") %>%
     mutate(koff_info1 = ifelse(koff_info1 == "True", 1, 0)) %>%
-    by_row(calc_net_score_info, game_tracker = GAME_TRACKER, .collate = "cols",
-           .to = "ex_score_info") %>%
     dplyr::rename(net_score_to_half = ex_score_info1,
            net_score_to_reset = ex_score_info2,
            time_to_reset = ex_score_info4,
@@ -331,11 +342,9 @@ make_off_won_binary <- function(play_row, game_tracker = GAME_TRACKER){
   }
 }
 
-first_and_tens <- make_raw_exp_scores_table(test = TRUE, plays_df = PLAYS_DF) %>%
+first_and_tens <- make_raw_exp_scores_table(test = FALSE, plays_df = PLAYS_DF) %>%
   by_row(convert_reset_time, .collate = "cols", .to = "reset_time_info") %>% 
-  by_row(make_off_won_binary, .collate = "cols", .to = "Offense_Won")
-
-first_and_tens <- first_and_tens %>%
+  by_row(make_off_won_binary, .collate = "cols", .to = "Offense_Won") %>%
   rename(# Time variables
          Reset_qtr = reset_time_info1,
          Reset_min = reset_time_info2,
@@ -397,7 +406,7 @@ first_and_tens <- first_and_tens %>%
   Min_Reset_to_GameEnd,
   Follow_Kickoff,
   Kickoff_Type,
-  Offense_Won) %>%
+  Offense_Won)
 write_csv(first_and_tens, 'raw_fdowns_nscore_half_and_reset.csv')
 
 test_koff <- function(pid_of_int, plays_df = PLAYS_DF){
