@@ -40,7 +40,7 @@ GAME_TRACKER <- sort(unique(PLAYS_DF$gid)) %>%
 calc_net_score_info <- function(play_row, game_tracker){
   # Get the current play, and all future plays within the same game that are in
   # the same half of the game.
-  print(sprintf("Calc net score info for pid: %d", play_row$pid))
+  # print(sprintf("Calc net score info for pid: %d", play_row$pid))
   cur_game_plays <- game_tracker[[play_row$gid]] # Extract current game df
   search_df <- cur_game_plays %>%
     dplyr::filter(pid >= play_row$pid,
@@ -117,7 +117,6 @@ calc_net_score_info <- function(play_row, game_tracker){
 }
 
 calc_koff_info <- function(play_row, game_tracker){
-  browser()
   print(sprintf("Koff for pid: %d", play_row$pid))
   # Create dummy for 1st and 10 following a kickoff and the kickoff typeg
   if (play_row$qtr %in% c(1, 2)){
@@ -260,7 +259,7 @@ calc_net_scores <- function(play_row, off_of_int){
 
 make_raw_exp_scores_table <- function(test = FALSE, plays_df){
   if (test){
-    gid_stop <- 3
+    gid_stop <- 4
   } else {
     gid_stop <- Inf
   }
