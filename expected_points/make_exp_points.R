@@ -40,7 +40,7 @@ GAME_TRACKER <- sort(unique(PLAYS_DF$gid)) %>%
 calc_net_score_info <- function(play_row, game_tracker){
   # Get the current play, and all future plays within the same game that are in
   # the same half of the game.
-  print(sprintf("Calc net score info for pid:", play_row$pid))
+  print(sprintf("Calc net score info for pid: %d", play_row$pid))
   cur_game_plays <- game_tracker[[play_row$gid]] # Extract current game df
   search_df <- cur_game_plays %>%
     dplyr::filter(pid >= play_row$pid,
