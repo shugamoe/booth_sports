@@ -132,7 +132,7 @@ calc_koff_info <- function(play_row, game_tracker){
     dplyr::filter(qtr %in% play_half,
                   pid < play_row$pid)
   
-  if (nrow(plays_before == 0)){ # Special case in which case the kickoff that starts 1st or second half of game is not recorded
+  if (nrow(plays_before) == 0){ # Special case in which case the kickoff that starts 1st or second half of game is not recorded
     kickoff_dummy <- "True"
     if (half == 1){
       kickoff_type <- "1STHF"
@@ -341,7 +341,7 @@ make_off_won_binary <- function(play_row, game_tracker = GAME_TRACKER){
   }
 }
 
-first_and_tens <- make_raw_exp_scores_table(test = FALSE, plays_df = PLAYS_DF) %>%
+first_and_tens <- make_raw_exp_scores_table(test = TRUE, plays_df = PLAYS_DF) %>%
   by_row(convert_reset_time, .collate = "cols", .to = "reset_time_info") %>% 
   by_row(make_off_won_binary, .collate = "cols", .to = "Offense_Won") %>%
   rename(# Time variables
