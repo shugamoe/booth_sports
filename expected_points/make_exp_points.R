@@ -4,6 +4,7 @@ library(dplyr)
 library(readr)
 library(MASS)
 library(purrr)
+library(magrittr)
 
 calc_min_in_half <- function(play_row){
   qtr <- play_row$qtr
@@ -34,7 +35,8 @@ extract_game_plays_df <- function(plays_df, game_id){
 }
 
 # Function to make calculations more efficient; stores dataframes for each game
-GAME_TRACKER <- sort(unique(PLAYS_DF$gid)) %>%
+GAME_TRACKER <- sort(unique(PLAYS_DF$gid)) %T>%
+ print("Making Game Tracker", null = .) %>%
  map(~ extract_game_plays_df(plays_df = PLAYS_DF,  game_id = .))
 
 calc_net_score_info <- function(play_row, game_tracker){
@@ -113,7 +115,10 @@ calc_net_score_info <- function(play_row, game_tracker){
   }
   
   net_till_half_score <- sum(search_df$net_score)
-  (net_score_info <- c(net_till_half_score, net_till_reset_score, reset_min_in_half, time_to_reset, Reset_Team_to_Score))
+  (net_score_info <- as.numeric(c(net_till_half_score, net_till_reset_score, 
+                                  reset_min_in_half, 
+                                  time_to_reset, 
+                                  Reset_Team_to_Score)))
 }
 
 calc_koff_info <- function(play_row, game_tracker){
@@ -270,24 +275,22 @@ make_raw_exp_scores_table <- function(test = FALSE, plays_df){
          def != off,
          gid < gid_stop,
          type %in% c("PASS", "RUSH", "NOPL")) %>%
-    dplyr::select(seas, wk, gid, pid, qtr, min_in_game, min_in_half, min, sec, h, ptso, ptsd, off, def, yfog, dseq, type)
+    dplyr::select(seas, wk, gid, pid, qtr, min_in_game, min_in_half, min, sec, h,
+                  ptso, ptsd, off, def, yfog, dseq, type)
+  
   first_and_tens <- first_and_tens %>%
     by_row(calc_net_score_info, game_tracker = GAME_TRACKER, .collate = "cols",
-           .to = "ex_score_info") %>%
+           .to = "ex_score_info") %T>%
+    print("Net Score info calculated, calculating koff info", null = .) %>%
     by_row(calc_koff_info, game_tracker = GAME_TRACKER, .collate = "cols",
-           .to = "koff_info") %>%
-    mutate(koff_info1 = ifelse(koff_info1 == "True", 1, 0)) %>%
-    dplyr::rename(net_score_to_half = ex_score_info1,
-           net_score_to_reset = ex_score_info2,
-           time_to_reset = ex_score_info4,
-           reset_min_in_half = ex_score_info3) %>%
-    dplyr::mutate(drive_start = ifelse(dseq == 1, 1, 0)) %>%
-    mutate_at(.vars = c("net_score_to_half", "net_score_to_reset",
-                "time_to_reset", "reset_min_in_half"), .funs = as.numeric) %>%
-    dplyr::mutate(reset_min_in_game = ifelse(qtr %in% c(1, 2), 30 + reset_min_in_half,
-                                      ifelse(qtr %in% c(3, 4), reset_min_in_half,
-                                             NA)),
-           Playoff = ifelse(wk >= 17, 1, 0))
+           .to = "koff_info") %T>%
+    print("Koff info calculated, mutating follow_koff to 0, 1", null = .) %>%
+    mutate(koff_info1 = ifelse(koff_info1 == "True", 1, 0)) %T>%
+    print("Mutating drive start", null = .) %>%
+    dplyr::mutate(drive_start = ifelse(dseq == 1, 1, 0)) %T>%
+    print("Making net score numeric", null = .)
+  
+  print("make raw_exp_score table terminating")
   first_and_tens
 }
 
@@ -342,9 +345,21 @@ make_off_won_binary <- function(play_row, game_tracker = GAME_TRACKER){
 }
 
 first_and_tens <- make_raw_exp_scores_table(test = TRUE, plays_df = PLAYS_DF) %>%
-  by_row(convert_reset_time, .collate = "cols", .to = "reset_time_info") %>% 
-  by_row(make_off_won_binary, .collate = "cols", .to = "Offense_Won") %>%
+  dplyr::mutate(reset_min_in_game = ifelse(qtr %in% c(1, 2), 30 + ex_score_info3,
+                                    ifelse(qtr %in% c(3, 4), ex_score_info3,
+                                           NA)),
+         Playoff = ifelse(wk >= 17, 1, 0)) %T>%
+  print("Converting reset time", null = .) %>%
+  by_row(convert_reset_time, .collate = "cols", .to = "reset_time_info") %T>%
+  print("Making won playoff binary", null = .) %>%
+  by_row(make_off_won_binary, .collate = "cols", .to = "Offense_Won") %T>%
+  print("Renaming vars", null = .) %>%                            # Reset min in half
   rename(# Time variables
+         Net_Score_to_Half = ex_score_info1,
+         Net_Score_to_Reset = ex_score_info2,
+         Min_Reset_to_Half = ex_score_info3,
+         Time_to_Reset = ex_score_info4,
+         Reset_Team_to_Score = ex_score_info5,
          Reset_qtr = reset_time_info1,
          Reset_min = reset_time_info2,
          Reset_sec = reset_time_info3,
@@ -366,15 +381,11 @@ first_and_tens <- make_raw_exp_scores_table(test = TRUE, plays_df = PLAYS_DF) %>
          Yfog = yfog,
          Armchair_dsq = dseq,
          Drive_start = drive_start,
-         Net_Score_to_Half = net_score_to_half,
-         Net_Score_to_Reset = net_score_to_reset,
-         Time_to_Reset = time_to_reset,
-         Min_Reset_to_Half = reset_min_in_half,
          Min_Reset_to_GameEnd = reset_min_in_game,
-         Reset_Team_to_Score = ex_score_info5,
          Follow_Kickoff = koff_info1,
          Kickoff_Type = koff_info2
-         ) %>%
+         ) %T>%
+  print("Selecting Vars", null = .) %>%
   dplyr::select(
   Season,
   Week,
