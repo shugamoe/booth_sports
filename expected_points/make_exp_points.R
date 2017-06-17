@@ -121,8 +121,11 @@ calc_net_score_info <- function(play_row, game_tracker){
                                   Reset_Team_to_Score)))
 }
 
-calc_koff_info <- function(play_row, game_tracker){
+calc_koff_info <- function(play_row, game_tracker, test = FALSE){
   print(sprintf("Koff for pid: %d", play_row$pid))
+  if (test){
+    browser()
+  }
   # Create dummy for 1st and 10 following a kickoff and the kickoff typeg
   if (play_row$qtr %in% c(1, 2)){
     half <- 1
@@ -148,7 +151,24 @@ calc_koff_info <- function(play_row, game_tracker){
   }
   
   kickoffs_before <- plays_before %>%
-    dplyr::filter(type %in% c("KOFF", "ONSD"))
+    filter(type %in% c("KOFF", "ONSD"))
+  
+  if (nrow(kickoffs_before) == 0){ # Part of special case above, but for first downs that come after.
+    first_downs_before <- plays_before %>% # No kickoff to refer to, only whether or not there are other first downs before
+      filter(dwn == 1, ytg == 10 | yfog >= 90)
+   if (nrow(first_downs_before) == 0){
+     kickoff_dummy <- "False"
+     kickoff_type <- "NA"
+   } else {
+      kickoff_dummy <- "True"  
+      if (half == 1){
+        kickoff_type <- "1STHF"
+      } else {
+        kickoff_type = "2NDHF"
+      }
+   }
+    return(c(kickoff_dummy, kickoff_type))
+  } 
   
   last_kickoff <- tail(kickoffs_before, 1)
   plays_after_kickoff <- cur_game_plays %>%
@@ -169,6 +189,7 @@ calc_koff_info <- function(play_row, game_tracker){
     try( # It's possible that if there's a penalty before the kickoff at the beginning of the game 
       # that this can break, we simply let it break, and the stuff ahead appropriately marks
       # the kickoff as a first or second half one.
+      expr = 
     while (play_before_kickoff$type %in% c("FGXP", "CONV", "NOPL") && 
            play_before_kickoff$pts == 0){
         play_before_kickoff <- plays_before %>%
@@ -180,8 +201,8 @@ calc_koff_info <- function(play_row, game_tracker){
     try(
     if (play_before_kickoff$pts == 0){
       print(cur_game_plays %>% 
-              filter(pid < play_row$pid + 15, pid > play_row$pid - 15)) %>%
-              dplyr::select(qtr, type, pts, pid) 
+              filter(pid < play_row$pid + 15, pid > play_row$pid - 15) %>%
+              dplyr::select(qtr, type, pts, pid))
       missed_fg <- TRUE
       return(c("True", "FG")) # Special case for missed field goal
     } else {
@@ -244,7 +265,12 @@ calc_koff_info <- function(play_row, game_tracker){
     }
   }
   # browser()
-  (kickoff_info <- c(kickoff_dummy, kickoff_type))
+  kickoff_info <- c(kickoff_dummy, kickoff_type)
+  if (any(is.na(kickoff_info))){
+    browser()  
+  } else {
+    kickoff_info
+  }
 }
 
 calc_net_scores <- function(play_row, off_of_int){
@@ -264,27 +290,29 @@ calc_net_scores <- function(play_row, off_of_int){
 
 make_raw_exp_scores_table <- function(test = FALSE, plays_df){
   if (test){
-    gid_stop <- 4
+    gid_start <- 4463
   } else {
-    gid_stop <- Inf
+    gid_start <- 1
   }
   first_and_tens <- plays_df %>%
     dplyr::filter(dwn == 1,
          ytg == 10 | yfog > 90,
          qtr %in% c(1, 2, 3, 4),
          def != off,
-         gid < gid_stop,
+         gid >= gid_start,
          type %in% c("PASS", "RUSH", "NOPL")) %>%
     dplyr::select(seas, wk, gid, pid, qtr, min_in_game, min_in_half, min, sec, h,
                   ptso, ptsd, off, def, yfog, dseq, type)
   
   first_and_tens <- first_and_tens %>%
+    by_row(calc_koff_info, game_tracker = GAME_TRACKER, .collate = "cols",
+           .to = "koff_info")
+  print("Koff info calculated")
+  
+  first_and_tens <- first_and_tens %>%
     by_row(calc_net_score_info, game_tracker = GAME_TRACKER, .collate = "cols",
            .to = "ex_score_info") %T>%
-    print("Net Score info calculated, calculating koff info", null = .) %>%
-    by_row(calc_koff_info, game_tracker = GAME_TRACKER, .collate = "cols",
-           .to = "koff_info") %T>%
-    print("Koff info calculated, mutating follow_koff to 0, 1", null = .) %>%
+    print("Net Score Info calculated, mutating follow_koff to 0, 1", null = .) %>%
     mutate(koff_info1 = ifelse(koff_info1 == "True", 1, 0)) %T>%
     print("Mutating drive start", null = .) %>%
     dplyr::mutate(drive_start = ifelse(dseq == 1, 1, 0)) %T>%
@@ -419,10 +447,13 @@ first_and_tens <- make_raw_exp_scores_table(test = TRUE, plays_df = PLAYS_DF) %>
   Offense_Won)
 write_csv(first_and_tens, 'raw_fdowns_nscore_half_and_reset.csv')
 
-test_koff <- function(pid_of_int, plays_df = PLAYS_DF){
-  check_dat <- plays_df %>%
-    filter(pid < pid_of_int + 15,
-           pid > pid_of_int - 15) %>%
-    dplyr::select(pid, qtr, type, pts)
-  check_dat
+test_extract_row <- function(pid_of_int, plays_df = PLAYS_DF){
+  plays_df %>% filter(pid == pid_of_int) %>%
+    tail(1)
+}
+
+test_show_context <- function(pid_of_int, plays_df = PLAYS_DF){
+  print(plays_df %>% filter(pid < pid_of_int + 15, pid > pid_of_int - 15) %>%
+          dplyr::select(type, dwn, ytg, qtr, pts, pid, gid))
+  print(pid_of_int)
 }
