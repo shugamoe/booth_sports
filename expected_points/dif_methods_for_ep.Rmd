@@ -1,0 +1,154 @@
+---
+title: "Expected Points | Different Methods"
+author: "Julian McClellan"
+date: "June 12, 2017"
+output: 
+  pdf_document
+---
+
+```{r setup, include=FALSE, message=FALSE, warning=FALSE}
+library(tidyverse)
+library(ggplot2)
+library(reshape2)
+
+knitr::opts_chunk$set(message = FALSE)
+
+theme_set(theme_minimal())
+
+EXP_DAT <- read_csv("../raw_fdowns_nscore_half_and_reset.csv")
+KOFF <- EXP_DAT %>%
+  filter(Follow_Kickoff == 1)
+
+```
+
+## Variable Construction
+
+$$V_k = Expected\; Net\; Points \; from \; Kickoff \; until\; EOH$$
+
+```{r build_vk}
+V_k <- KOFF %>% group_by(Yfog) %>% summarise(mean_eoh_net = mean(Net_Score_to_Half))
+
+V_k %>%
+  ggplot(aes(x = Yfog, y = mean_eoh_net)) +
+    geom_line() + 
+    labs(title = expression(V[k] ~ by ~ Yard ~ Line),
+         y = expression(V[k]),
+         x = "Yards from own Goal")
+```
+$$
+V_{k} ^ {rec} = \frac{Prob(O\; |\;KO) * ExpPTS_O + Prob(D\;|\;KO) * ExpPTS_D + 
+[1 - Prob(O\;|\;KO) - Prob(D\;|\;KO)] * ExpNetPTS}{1}
+$$
+
+$$Prob(O\; |\; yrdline = x)$$
+
+```{r}
+P_oscore_yd <- EXP_DAT %>% 
+  mutate(offense_score = ifelse(Reset_Team_to_Score == 1, 1, 0)) %>% 
+  group_by(Yfog) %>%
+  summarise(prob = mean(offense_score))
+
+P_oscore_yd %>%
+  ggplot(aes(x = Yfog, y = prob)) +
+    geom_line() +
+    labs(title = "P(Offense Scored | yardline)",
+         y = "P(Offense Scored)",
+         x = "Yards from own Goal")
+```
+
+$$Prob(D\; |\; yrdline = x)$$
+
+```{r}
+P_dscore_yd <- EXP_DAT %>% 
+  mutate(defense_score = ifelse(Reset_Team_to_Score == - 1, 1, 0)) %>% 
+  group_by(Yfog) %>%
+  summarise(prob = mean(defense_score))
+
+P_dscore_yd %>%
+  ggplot(aes(x = Yfog, y = prob)) +
+    geom_line() +
+    labs(title = "P(Defense Scored | yardline)",
+         y = "P(Defense Scored)",
+         x = "Yards from own Goal")
+```
+
+$$ExpPTS_o\; |\; O\; Score,\; yrdline = x$$
+
+```{r}
+exp_ptso <- EXP_DAT %>%
+  filter(Reset_Team_to_Score == 1) %>%
+  group_by(Yfog) %>%
+  summarise(exp_pts = mean(Net_Score_to_Reset))
+
+exp_ptso %>%
+  ggplot(aes(x = Yfog, y = exp_pts)) +
+    geom_line() + 
+    labs(title = "Exp_pts_o | O Score, yrdline = x",
+           x = "Yards from own goal",
+           y = "Offense Expected Net Points")
+```
+
+$$ExpPTS_d\; |\; D\; Score,\; yrdline = x$$
+```{r}
+exp_ptsd <- EXP_DAT %>%
+  filter(Reset_Team_to_Score == -1) %>%
+  group_by(Yfog) %>%
+  summarise(exp_pts = mean(abs(Net_Score_to_Reset)))
+
+exp_ptsd %>%
+  ggplot(aes(x = Yfog, y = exp_pts)) +
+    geom_line() + 
+    labs(title = "Exp_pts_d | D Score, yrdline = x",
+           x = "Yards from own goal (Offense)",
+           y = "Defense Expected Net Points")
+```
+
+$$ExpPTS\; |\; No\; TD,\; No\; FG,\; yrdline = x$$
+
+```{r}
+exp_ptsn <- EXP_DAT %>%
+  filter(Reset_Team_to_Score == 0) %>%
+  group_by(Yfog) %>%
+  summarise(exp_points = mean(Net_Score_to_Reset))
+
+exp_ptsn %>%
+  ggplot(aes(x = Yfog, y = exp_points)) + 
+    geom_line() +
+    labs(title = "Exp_points | No TD, No FG, yrdline = x",
+         y = "Exp Points | No TD, No FG",
+         x = "Yards from own Goal")
+```
+
+## Expected Net Points ($V_k$)
+
+$$
+ENP(yrdline = x) = Prob(O\;|\; yrdline = x) * [(ExpPTS_O\; | O\;Score, yrdline = x) - V_k] -
+$$
+$$
+ Prob(D | yrdline = x) * [(ExpPTS_D\; | D Score, yrdline = x) - V_k] + 
+$$
+$$
+[1 - Prob(O|yrdline = x) - Prob(D|yrdline=x)] * (ExpNetPts | Not\;TD,\;Not\;FG,yrdline = x)
+$$
+
+```{r}
+# extracts yrdline stat from the tidy df
+eys <- function(tidy_df){
+  pull(tidy_df, -Yfog)
+}
+
+ENP_yrdline <- tibble(Yfog = 1:99,
+                      enp = eys(P_oscore_yd) * (eys(exp_ptso) - 
+                            eys(V_k)) -  eys(P_dscore_yd) * (eys(exp_ptsd) + eys(V_k)) +
+  (1 - eys(P_oscore_yd) - eys(P_dscore_yd)) *
+  (eys(exp_ptsn))
+)
+
+ENP_yrdline %>%
+  ggplot(aes(x = Yfog, y = enp)) + 
+    geom_line() + 
+    labs(title = expression(Expected ~ Net ~ Points ~ (V[k])),
+         x = "Yards from own goal",
+         y = "Expected Net Points")
+# Use melt to graph everything together
+```

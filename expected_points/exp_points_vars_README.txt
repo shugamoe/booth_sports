@@ -18,7 +18,7 @@ Armchair_dsq: Drive sequence. The number indicating the current play of the driv
 Drive_start: Boolean (0, 1). Whether or not the current play is the start of a drive
 Net_Score_to_Half: The net score, from the offensive POV, the occurs from the current play to the end of the half
 Net_Score_to_Reset: The net score, from the offensive POV, that occurs from the current play until a FG, TD, or end of the half
-Reset_Team_to_Score: Categorical (-1,0,1). Indicates whether the defense scored a FG or TD to initiate a reset (-1), whether the offesnse did (1), or whether the reset was caused by the end of the half.
+Reset_Team_to_Score: Categorical (-1,0,1). Indicates whether the defense scored a FG or TD to initiate a reset (-1), whether the offense did (1), or whether the reset was caused by the end of the half.
 Reset_qtr: The quarter in which the reset play (FG, TD, end of half) occurred
 Reset_min: The minute in which the reset play (FG, TD, end of half) occurred
 Reset_sec: The second in which the reset play (FG, TD, end of half) occurred
