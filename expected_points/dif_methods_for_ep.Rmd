@@ -11,6 +11,7 @@ output:
 library(tidyverse)
 library(ggplot2)
 library(reshape2)
+library(latex2exp)
 
 knitr::opts_chunk$set(message = FALSE)
 
@@ -21,22 +22,186 @@ KOFF <- EXP_DAT %>%
   filter(Follow_Kickoff == 1)
 ```
 
+```{r construct_vars}
+# extracts yrdline stat from the tidy df
+eys <- function(tidy_df){
+  pull(tidy_df, -Yfog) }
+
+# For Expected Net Points until End of Half Using V_K
+V_k <- KOFF  %>%
+  group_by(Yfog)  %>%
+  summarise(V_k = mean(Net_Score_to_Half))
+
+P_o <- EXP_DAT %>% 
+  mutate(offense_score = ifelse(Reset_Team_to_Score == 1, 1, 0)) %>% 
+  group_by(Yfog) %>%
+  summarise(P_o = mean(offense_score))
+
+P_d <- EXP_DAT %>% 
+  mutate(defense_score = ifelse(Reset_Team_to_Score == - 1, 1, 0)) %>% 
+  group_by(Yfog) %>%
+  summarise(P_d = mean(defense_score))
+
+enp_o_oscore_yd <- EXP_DAT %>%
+  filter(Reset_Team_to_Score == 1) %>%
+  group_by(Yfog) %>%
+  summarise(enp_o_oscore_yd = mean(Net_Score_to_Reset))
+
+enp_o_dscore_yd <- EXP_DAT %>%
+  filter(Reset_Team_to_Score == -1) %>%
+  group_by(Yfog) %>%
+  summarise(enp_o_dscore_yd = mean(Net_Score_to_Reset))
+
+enp_o_noscore_yd <- EXP_DAT %>%
+  filter(Reset_Team_to_Score == 0) %>%
+  group_by(Yfog) %>%
+  summarise(enp_o_noscore_yd = mean(Net_Score_to_Reset))
+
+# For Expected Net Points until End of Half using V_k recursive
+ko_P_o <- KOFF %>%
+  mutate(offense_score = ifelse(Reset_Team_to_Score == 1, 1, 0)) %>% 
+  group_by(Yfog) %>%
+  summarise(ko_P_o = mean(offense_score))
+
+ko_P_d <- KOFF %>% 
+  mutate(defense_score = ifelse(Reset_Team_to_Score == - 1, 1, 0)) %>% 
+  group_by(Yfog) %>%
+  summarise(ko_P_d = mean(defense_score))
+
+ko_enp_o_oscore_yd <- EXP_DAT %>%
+  filter(Reset_Team_to_Score == 1) %>%
+  group_by(Yfog) %>%
+  summarise(ko_enp_o_oscore_yd = mean(Net_Score_to_Reset))
+
+ko_enp_o_dscore_yd <- EXP_DAT %>%
+  filter(Reset_Team_to_Score == -1) %>%
+  group_by(Yfog) %>%
+  summarise(ko_enp_o_dscore_yd = mean(Net_Score_to_Reset))
+
+ko_enp_o_noscore_yd <- EXP_DAT %>%
+  filter(Reset_Team_to_Score == 0) %>%
+  group_by(Yfog) %>%
+  summarise(ko_enp_o_noscore_yd = mean(Net_Score_to_Reset))
+
+V_k_rec <- tibble(Yfog = 1:99,
+                  V_k_rec = (eys(ko_P_o) * eys(ko_enp_o_oscore_yd) -
+                    eys(ko_P_d) * eys(ko_enp_o_dscore_yd) +
+                    (1 - eys(ko_P_o) - eys(ko_P_d)) * eys(ko_enp_o_noscore_yd)) /
+                    (1 + eys(ko_P_o) + eys(ko_P_d))
+                  ) 
+```
+
+# Expected Net Points Until End of Half
+
+```{r}
+# Joins the data in several tables with yfog stats into one
+combine_yfog_stats <- function(..., col_name){
+  data_frames <- list(...)
+  
+  for (df in data_frames){
+    if (!exists("base_df")){
+      base_df <- df
+    } else {
+      base_df <- inner_join(base_df, df)
+    }
+  }
+  base_df %>%
+    select(-Yfog) %>%
+    melt(value.name = col_name) %>%
+    mutate(Yfog = rep(1:99, length(data_frames)))
+}
+
+ foreoh_avg <- EXP_DAT %>%
+  group_by(Yfog) %>%
+  summarise(enp_eoh_avg = mean(Net_Score_to_Half))
+
+enp_eoh_vk <- tibble(Yfog = 1:99,
+                     enp_eoh_vk = eys(P_o) * (eys(enp_o_oscore_yd) - 
+                       eys(V_k)) -  eys(P_d) * (- eys(enp_o_dscore_yd) + 
+                       eys(V_k)) + (1 - eys(P_o) - eys(P_d)) * 
+                       (eys(enp_o_noscore_yd))
+                     )
+
+enp_eoh_vk_rec <- tibble(Yfog = 1:99,
+                         enp_eoh_vk_rec = eys(ko_P_o) * (eys(ko_enp_o_oscore_yd) 
+                           -  eys(V_k_rec)) -  eys(ko_P_d) * 
+                          (- eys(ko_enp_o_dscore_yd) +  eys(V_k_rec)) + 
+                          (1 - eys(ko_P_o)  - eys(ko_P_d)) *
+                          (eys(ko_enp_o_noscore_yd))
+                        )
+
+enp_all <- combine_yfog_stats(enp_eoh_avg, enp_eoh_vk, enp_eoh_vk_rec, col_name = "enp")
+
+ggplot(enp_all, aes(Yfog, enp, color = variable)) + 
+  geom_line() + 
+  geom_line() + 
+  geom_line() + 
+  scale_color_manual(name = "Net Points Type", values = c("black", "blue", "red"),
+                     labels = c("Average", "V_k",
+                                "V_k recursive")) + 
+  labs(title = "Expected Net Points Comparison",
+       x = "Yards from Own Goal",
+       y = "Expected Net Points until End of Half (Offense)")
+```
+
+
+# Probability of Offense/Defense/No One Scoring a TD/FG Before Halftime by Yardline
+
+### Any First and 10/Goal
+
+```{r}
+one_min_o_min_d <- tibble(Yfog = 1:99, omomd = 1 - eys(P_o) - eys(P_d))
+score_prob <- combine_yfog_stats(P_o, P_d, one_min_o_min_d, col_name = "score_prob")
+
+ggplot(score_prob, aes(Yfog, score_prob, color = variable)) + 
+  geom_line() + 
+  geom_line() + 
+  geom_line() + 
+  scale_color_manual(name = "Who Scores TD/FG Before Halftime", values = c("black", "blue", "red"),
+                     labels = c("Offense", "Defense",
+                                "No TD/FG Before Half")) + 
+  labs(title = "Prob of Offense/Defense/No One Scoring a TD/FG Before Halftime by Yardline",
+       subtitle = "All First and 10s/Goals",
+       x = "Yards from Own Goal",
+       y = "Probability")
+```
+
+### Only First and 10/Goal Following Kickoff
+
+```{r}
+ko_one_min_o_min_d <- tibble(Yfog = 1:99, omomd = 1 - eys(ko_P_o) - eys(ko_P_d))
+ko_score_prob <- combine_yfog_stats(ko_P_o, ko_P_d, ko_one_min_o_min_d, col_name = "ko_score_prob")
+
+ggplot(ko_score_prob, aes(Yfog, ko_score_prob, color = variable)) + 
+  geom_line() + 
+  geom_line() + 
+  geom_line() + 
+  scale_color_manual(name = "Who Scores TD/FG Before Halftime", values = c("black", "blue", "red"),
+                     labels = c("Offense", "Defense",
+                                "No TD/FG Before Half")) + 
+  labs(title = "Prob of Offense/Defense/No One Scoring a TD/FG Before Halftime by Yardline",
+       subtitle = "First and 10s/Goals Following a Kickoff",
+       x = "Yards from Own Goal",
+       y = "Probability")
+```
+
+g1 col a = enp(x) normal way mean (to the half)
+g1 col b = enp(x) with (V_k ^ rec)
+g1 col c = enp(x) with V_k
+g2 col d, e = Prob(O | yrdline = x), Prob(D | yrdline = x)
+g2 col f = 1 - col d - col e
+g3 col g = (ExpNetPTS_O | O, yrdline = x)
+g3 col h = (ExpNetPTS_O | D, yrdline = x)
+g3 col i = (ExpNetPTS_O | No TD/FG, yrdline = x) 
+g4 col j = V_k ^ rec
+g4 col k = V_k
+
+# Expected Net Points for the Offense | Offense Scored TD/FG, Defense Did, No One Did
+
 ## Variable Construction
 
 $$V_k = Expected\; Net\; Points \; from \; Kickoff \; until\; EOH$$
 
-```{r build_vk}
-V_k <- KOFF  %>%
-  group_by(Yfog)  %>%
-  summarise(mean_eoh_net = mean(Net_Score_to_Half))
-
-V_k %>%
-  ggplot(aes(x = Yfog, y = mean_eoh_net)) +
-    geom_line() + 
-    labs(title = expression(V[k] ~ by ~ Yard ~ Line),
-         y = expression(V[k]),
-         x = "Yards from own Goal")
-```
 $$
 V_{k} ^ {rec} = \frac{Prob(O\; |\;KO) * ExpPTS_O + Prob(D\;|\;KO) * ExpPTS_D + 
 [1 - Prob(O\;|\;KO) - Prob(D\;|\;KO)] * ExpNetPTS}{1}
@@ -44,50 +209,13 @@ $$
 
 $$Prob(O\; |\; yrdline = x)$$
 
-```{r}
-P_oscore_yd <- EXP_DAT %>% 
-  mutate(offense_score = ifelse(Reset_Team_to_Score == 1, 1, 0)) %>% 
-  group_by(Yfog) %>%
-  summarise(prob = mean(offense_score))
-
-P_oscore_yd %>%
-  ggplot(aes(x = Yfog, y = prob)) +
-    geom_line() +
-    labs(title = "P(Offense Scored | yardline)",
-         y = "P(Offense Scored)",
-         x = "Yards from own Goal")
-```
 
 $$Prob(D\; |\; yrdline = x)$$
 
-```{r}
-P_dscore_yd <- EXP_DAT %>% 
-  mutate(defense_score = ifelse(Reset_Team_to_Score == - 1, 1, 0)) %>% 
-  group_by(Yfog) %>%
-  summarise(prob = mean(defense_score))
-
-P_dscore_yd %>%
-  ggplot(aes(x = Yfog, y = prob)) +
-    geom_line() +
-    labs(title = "P(Defense Scored | yardline)",
-         y = "P(Defense Scored)",
-         x = "Yards from own Goal")
-```
 
 $$ExpNetPTS_o\; |\; O\; Score,\; yrdline = x$$
 
 ```{r}
-exp_ptso <- EXP_DAT %>%
-  filter(Reset_Team_to_Score == 1) %>%
-  group_by(Yfog) %>%
-  summarise(exp_pts = mean(Net_Score_to_Reset))
-
-exp_ptso %>%
-  ggplot(aes(x = Yfog, y = exp_pts)) +
-    geom_line() + 
-    labs(title = "Exp_pts_o | O Score, yrdline = x",
-           x = "Yards from own goal",
-           y = "Offense Expected Net Points")
 ```
 
 $$ExpNetPTS_d\; |\; D\; Score,\; yrdline = x$$
@@ -95,33 +223,12 @@ $$ExpNetPTS_d\; |\; D\; Score,\; yrdline = x$$
 $$ExpNetPTS_O\; |\; D\; Score,\; yrdline = x$$
 
 ```{r}
-exp_ptsd <- EXP_DAT %>%
-  filter(Reset_Team_to_Score == -1) %>%
-  group_by(Yfog) %>%
-  summarise(exp_pts = mean(abs(Net_Score_to_Reset)))
 
-exp_ptsd %>%
-  ggplot(aes(x = Yfog, y = exp_pts)) +
-    geom_line() + 
-    labs(title = "Exp_pts_d | D Score, yrdline = x",
-           x = "Yards from own goal (Offense)",
-           y = "Defense Expected Net Points")
 ```
 
 $$ExpNetPTS_O\; |\; No\; TD,\; No\; FG,\; yrdline = x$$
 
 ```{r}
-exp_ptson <- EXP_DAT %>%
-  filter(Reset_Team_to_Score == 0) %>%
-  group_by(Yfog) %>%
-  summarise(exp_points = mean(Net_Score_to_Reset))
-
-exp_ptson %>%
-  ggplot(aes(x = Yfog, y = exp_points)) + 
-    geom_line() +
-    labs(title = "Exp_points | No TD, No FG, yrdline = x",
-         y = "Exp Points | No TD, No FG",
-         x = "Yards from own Goal")
 ```
 
 ## Expected Net Points ($V_k$)
@@ -137,34 +244,5 @@ $$
 $$
 
 ```{r}
-# extracts yrdline stat from the tidy df
-eys <- function(tidy_df){
-  pull(tidy_df, -Yfog)
-}
-
-ENP_yrdline <- tibble(Yfog = 1:99,
-                      enp = eys(P_oscore_yd) * (eys(exp_ptso) - 
-                            eys(V_k)) -  eys(P_dscore_yd) * (eys(exp_ptsd) + eys(V_k)) +
-  (1 - eys(P_oscore_yd) - eys(P_dscore_yd)) *
-  (eys(exp_ptson))
-)
-
-ENP_yrdline %>%
-  ggplot(aes(x = Yfog, y = enp)) + 
-    geom_line() + 
-    labs(title = expression(Expected ~ Net ~ Points ~ (V[k])),
-         x = "Yards from own goal",
-         y = "Expected Net Points")
-# Use melt to graph everything together
 ```
 
-g1 col a = enp(x) normal way mean (to the half)
-g1 col b = enp(x) with (V_k ^ rec)
-g1 col c = enp(x) with V_k
-g2 col d, e = Prob(O | yrdline = x), Prob(D | yrdline = x)
-g2 col f = 1 - col d - col e
-g3 col g = (ExpNetPTS_O | O, yrdline = x)
-g3 col h = (ExpNetPTS_O | D, yrdline = x)
-g3 col i = (ExpNetPTS_O | No TD/FG, yrdline = x) 
-g4 col j = V_k ^ rec
-g4 col k = V_k
