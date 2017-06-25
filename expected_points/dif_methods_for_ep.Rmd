@@ -1,7 +1,7 @@
 ---
-title: "Expected Points | Different Methods"
+title: "Expected Net Points | Different Methods"
 author: "Julian McClellan"
-date: "June 12, 2017"
+date: "June 25, 2017"
 output: 
   pdf_document:
     toc: true
@@ -12,8 +12,9 @@ library(tidyverse)
 library(ggplot2)
 library(reshape2)
 library(latex2exp)
+library(magrittr)
 
-knitr::opts_chunk$set(message = FALSE)
+knitr::opts_chunk$set(message = FALSE, echo = FALSE)
 
 theme_set(theme_minimal())
 
@@ -68,34 +69,48 @@ ko_P_d <- KOFF %>%
   group_by(Yfog) %>%
   summarise(ko_P_d = mean(defense_score))
 
-ko_enp_o_oscore_yd <- EXP_DAT %>%
+ko_enp_o_oscore_yd <- KOFF %>%
   filter(Reset_Team_to_Score == 1) %>%
   group_by(Yfog) %>%
   summarise(ko_enp_o_oscore_yd = mean(Net_Score_to_Reset))
 
-ko_enp_o_dscore_yd <- EXP_DAT %>%
+ko_enp_o_dscore_yd <- KOFF %>%
   filter(Reset_Team_to_Score == -1) %>%
   group_by(Yfog) %>%
   summarise(ko_enp_o_dscore_yd = mean(Net_Score_to_Reset))
 
-ko_enp_o_noscore_yd <- EXP_DAT %>%
+# Linear interpolation
+d_interp <- ko_enp_o_dscore_yd %$%
+  approx(Yfog, ko_enp_o_dscore_yd, xout = 1:99, method = "constant", rule=2)
+ko_enp_o_dscore_yd <- tibble(Yfog = d_interp$x,
+                             ko_enp_o_dscore_yd = d_interp$y)
+
+ko_enp_o_noscore_yd <- KOFF %>%
   filter(Reset_Team_to_Score == 0) %>%
   group_by(Yfog) %>%
   summarise(ko_enp_o_noscore_yd = mean(Net_Score_to_Reset))
 
+# More linear interpolation
+n_interp <- ko_enp_o_noscore_yd %$%
+  approx(Yfog, ko_enp_o_noscore_yd, xout = 1:99, method = "constant", rule=2)
+ko_enp_o_noscore_yd <- tibble(Yfog = n_interp$x,
+                              ko_enp_o_noscore_yd = n_interp$y)
+
 V_k_rec <- tibble(Yfog = 1:99,
-                  V_k_rec = (eys(ko_P_o) * eys(ko_enp_o_oscore_yd) -
-                    eys(ko_P_d) * eys(ko_enp_o_dscore_yd) +
+                  V_k_rec = (eys(ko_P_o) * eys(ko_enp_o_oscore_yd) +
+                    eys(ko_P_d) * (- eys(ko_enp_o_dscore_yd)) +
                     (1 - eys(ko_P_o) - eys(ko_P_d)) * eys(ko_enp_o_noscore_yd)) /
                     (1 + eys(ko_P_o) + eys(ko_P_d))
-                  ) 
+) 
 ```
+
+\pagebreak
 
 # Expected Net Points Until End of Half
 
 ```{r}
 # Joins the data in several tables with yfog stats into one
-combine_yfog_stats <- function(..., col_name){
+combine_yfog_stats <- function(..., col_name, melt = TRUE){
   data_frames <- list(...)
   
   for (df in data_frames){
@@ -105,13 +120,17 @@ combine_yfog_stats <- function(..., col_name){
       base_df <- inner_join(base_df, df)
     }
   }
-  base_df %>%
-    select(-Yfog) %>%
-    melt(value.name = col_name) %>%
-    mutate(Yfog = rep(1:99, length(data_frames)))
+  if (melt){
+    base_df %>%
+      select(-Yfog) %>%
+      melt(value.name = col_name) %>%
+      mutate(Yfog = rep(1:99, length(data_frames)))
+  } else {
+   base_df 
+  }
 }
 
- foreoh_avg <- EXP_DAT %>%
+enp_eoh_avg <- EXP_DAT %>%
   group_by(Yfog) %>%
   summarise(enp_eoh_avg = mean(Net_Score_to_Half))
 
@@ -147,9 +166,9 @@ ggplot(enp_all, aes(Yfog, enp, color = variable)) +
 
 # Probability of Offense/Defense/No One Scoring a TD/FG Before Halftime by Yardline
 
-### Any First and 10/Goal
 
 ```{r}
+### All First and 10/Goal
 one_min_o_min_d <- tibble(Yfog = 1:99, omomd = 1 - eys(P_o) - eys(P_d))
 score_prob <- combine_yfog_stats(P_o, P_d, one_min_o_min_d, col_name = "score_prob")
 
@@ -160,15 +179,15 @@ ggplot(score_prob, aes(Yfog, score_prob, color = variable)) +
   scale_color_manual(name = "Who Scores TD/FG Before Halftime", values = c("black", "blue", "red"),
                      labels = c("Offense", "Defense",
                                 "No TD/FG Before Half")) + 
-  labs(title = "Prob of Offense/Defense/No One Scoring a TD/FG Before Halftime by Yardline",
+  labs(title = "Prob of O/D/No One Scoring a TD/FG Before Halftime by Yardline",
        subtitle = "All First and 10s/Goals",
        x = "Yards from Own Goal",
        y = "Probability")
 ```
 
-### Only First and 10/Goal Following Kickoff
 
-```{r}
+```{r, eval=FALSE}
+### Only First and 10/Goal Following Kickoff
 ko_one_min_o_min_d <- tibble(Yfog = 1:99, omomd = 1 - eys(ko_P_o) - eys(ko_P_d))
 ko_score_prob <- combine_yfog_stats(ko_P_o, ko_P_d, ko_one_min_o_min_d, col_name = "ko_score_prob")
 
@@ -185,64 +204,112 @@ ggplot(ko_score_prob, aes(Yfog, ko_score_prob, color = variable)) +
        y = "Probability")
 ```
 
-g1 col a = enp(x) normal way mean (to the half)
-g1 col b = enp(x) with (V_k ^ rec)
-g1 col c = enp(x) with V_k
-g2 col d, e = Prob(O | yrdline = x), Prob(D | yrdline = x)
-g2 col f = 1 - col d - col e
-g3 col g = (ExpNetPTS_O | O, yrdline = x)
-g3 col h = (ExpNetPTS_O | D, yrdline = x)
-g3 col i = (ExpNetPTS_O | No TD/FG, yrdline = x) 
-g4 col j = V_k ^ rec
-g4 col k = V_k
+# Expected Net Points Conditional
 
-# Expected Net Points for the Offense | Offense Scored TD/FG, Defense Did, No One Did
 
-## Variable Construction
+```{r}
+### All First and 10/Goal
+enp_cond_all <- combine_yfog_stats(enp_o_oscore_yd, enp_o_dscore_yd, enp_o_noscore_yd, 
+                                   col_name = "enp_cond")
 
-$$V_k = Expected\; Net\; Points \; from \; Kickoff \; until\; EOH$$
+ggplot(enp_cond_all, aes(Yfog, enp_cond, color = variable)) + 
+  geom_line() + 
+  geom_line() + 
+  geom_line() + 
+  scale_color_manual(name = "Who Scores TD/FG Before Halftime",
+                     values = c("black", "blue", "red"),
+                     labels = c("Offense", "Defense",
+                                "No TD/FG Before Half")) + 
+  labs(title = "Conditional Expected Net Points for Offense by Yard Line",
+       subtitle = "All First and 10s/Goals",
+       x = "Yards from Own Goal",
+       y = "Expected Net Points (Offense)")
+```
+
+
+```{r, eval=FALSE}
+### Only First and 10/Goal Following Kickoff
+ko_enp_cond_all <- combine_yfog_stats(ko_enp_o_oscore_yd, ko_enp_o_dscore_yd, 
+                                      ko_enp_o_noscore_yd, 
+                                   col_name = "ko_enp_cond")
+
+ggplot(ko_enp_cond_all, aes(Yfog, ko_enp_cond, color = variable)) + 
+  geom_line() + 
+  geom_line() + 
+  geom_line() + 
+  scale_color_manual(name = "Who Scores TD/FG Before Halftime",
+                     values = c("black", "blue", "red"),
+                     labels = c("Offense", "Defense",
+                                "No TD/FG Before Half")) + 
+  labs(title = "Conditional Expected Net Points for Offense by Yard Line",
+       subtitle = "First and 10s/Goals Following a Kickoff",
+       x = "Yards from Own Goal",
+       y = "Expected Net Points (Offense)")
+```
+
+# $V_k$ and $V_{k}^{rec}$
+
+```{r}
+all_v_k <- combine_yfog_stats(V_k, V_k_rec, col_name = "v_k")
+
+ggplot(all_v_k, aes(Yfog, v_k, color = variable)) + 
+  geom_line() + 
+  geom_line() + 
+  geom_line() + 
+  scale_color_manual(name = expression(V[k] ~ Types),
+                     values = c("black", "blue"),
+                     labels = c("Normal", "Recursive")) + 
+  labs(title = expression(V[k] ~ by ~ Yardline),
+       x = "Yards from Own Goal",
+       y = "Expected Net Points until End of Half (Offense)")
+```
+
+
+
+```{r create_csv}
+# g1 col a = enp(x) normal way mean (to the half)
+# g1 col b = enp(x) with (V_k ^ rec)
+# g1 col c = enp(x) with V_k
+# g2 col d, e = Prob(O | yrdline = x), Prob(D | yrdline = x)
+# g2 col f = 1 - col d - col e
+# g3 col g = (ExpNetPTS_O | O, yrdline = x)
+# g3 col h = (ExpNetPTS_O | D, yrdline = x)
+# g3 col i = (ExpNetPTS_O | No TD/FG, yrdline = x) 
+# g4 col j = V_k ^ rec
+# g4 col k = V_k
+output_csv <- combine_yfog_stats(enp_eoh_avg, enp_eoh_vk, enp_eoh_vk_rec, 
+                                 P_o, P_d, one_min_o_min_d, enp_o_oscore_yd,
+                                 enp_o_dscore_yd, enp_o_noscore_yd, V_k, 
+                                 V_k_rec, col_name = NA, melt = FALSE) %>%
+  rename(`ENP Normal` = enp_eoh_avg,
+         `ENP V_k` = enp_eoh_vk,
+         `ENP V_k Recursive` = enp_eoh_vk_rec,
+         `Prob O Scores TD/FG` = P_o,
+         `Prob D Scores TD/FG` = P_d,
+         `1 - P(O) - P(D)` = omomd,
+         `ENP_O | O, yrdline = x` = enp_o_oscore_yd,
+         `ENP_O | D, yrdline = x` = enp_o_dscore_yd,
+         `ENP_O | No TD/FG, yrdline = x` = enp_o_noscore_yd,
+         `V_k recursive` = V_k_rec
+         ) %>%
+  write_csv("enp_methods_output.csv")
+```
+
+# Appendix: Variable Construction Formulas
 
 $$
-V_{k} ^ {rec} = \frac{Prob(O\; |\;KO) * ExpPTS_O + Prob(D\;|\;KO) * ExpPTS_D + 
+V_{k} ^ {rec} = \frac{Prob(O\; |\;KO) * ExpPTS_O + Prob(D\;|\;KO) * (- ExpPTS_O) + 
 [1 - Prob(O\;|\;KO) - Prob(D\;|\;KO)] * ExpNetPTS}{1}
 $$
-
-$$Prob(O\; |\; yrdline = x)$$
-
-
-$$Prob(D\; |\; yrdline = x)$$
-
-
-$$ExpNetPTS_o\; |\; O\; Score,\; yrdline = x$$
-
-```{r}
-```
-
-$$ExpNetPTS_d\; |\; D\; Score,\; yrdline = x$$
-
-$$ExpNetPTS_O\; |\; D\; Score,\; yrdline = x$$
-
-```{r}
-
-```
-
-$$ExpNetPTS_O\; |\; No\; TD,\; No\; FG,\; yrdline = x$$
-
-```{r}
-```
-
-## Expected Net Points ($V_k$)
 
 $$
 ENP(yrdline = x) = Prob(O\;|\; yrdline = x) * [(ExpNetPTS_O\; | O\;Score, yrdline = x) - V_k] -
 $$
 $$
- Prob(D | yrdline = x) * [(-ExpPTS_O\; | D Score, yrdline = x) - V_k] + 
+ Prob(D | yrdline = x) * [(-ExpPTS_O\; | D\;Score, yrdline = x) - V_k] + 
 $$
 $$
 [1 - Prob(O|yrdline = x) - Prob(D|yrdline=x)] * (ExpNetPts_O | Not\;TD,\;Not\;FG,yrdline = x)
 $$
 
-```{r}
-```
-
+Similarly except replace $V_k$ with $V_{k} ^ rec$.
