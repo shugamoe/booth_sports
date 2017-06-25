@@ -25,6 +25,6 @@ Reset_sec: The second in which the reset play (FG, TD, end of half) occurred
 Time_to_Reset: The time elapsed from the current play to the reset play (FG, TD, or end of half)
 Min_Reset_to_Half: The time remaining in the half when the reset play occurred
 Min_Reset_to_GameEnd: The time remaining in the game when the reset play occurred
-Follow_Kickoff: Is this 1st and 10 (or goal) the first one following a kickoff?
-Kickoff_Type: If it did follow a kickoff, did the kickoff come after a FG, TD, or the 1STHF or 2NDHF, or none (NA)?
+Follow_Kickoff: Is this 1st and 10 (or goal) the first one following a kickoff? (Safeties not included)
+Kickoff_Type: If it did follow a kickoff, did the kickoff come after a FG, TD, or the 1STHF or 2NDHF, or did it not follow a kickoff (None)? 
 Offense_Won: Did the offense of this current 1st and 10 (or goal) win the game?
