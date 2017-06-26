@@ -95,7 +95,7 @@ $(ExpPTS_O \;\|\; O, KO)$ | `r ko_enp_o_oscore_yd`
 $(ExpPTS_O \;\|\; D, KO)$ | `r ko_enp_o_dscore_yd`
 $(ExpPTS_O \;\|\; No\;TD/FG, KO)$ | `r ko_enp_o_noscore_yd`
 $V_k$ | `r V_k`
-$V_{k}^rec$ | `r V_k_rec`
+$V_{k}^{rec}$ | `r V_k_rec`
 
 \pagebreak
 
