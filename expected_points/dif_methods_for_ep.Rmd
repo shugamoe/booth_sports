@@ -29,9 +29,8 @@ eys <- function(tidy_df){
   pull(tidy_df, -Yfog) }
 
 # For Expected Net Points until End of Half Using V_K
-V_k <- KOFF  %>%
-  group_by(Yfog)  %>%
-  summarise(V_k = mean(Net_Score_to_Half))
+V_k <- KOFF  %$%
+  mean(Net_Score_to_Half)
 
 P_o <- EXP_DAT %>% 
   mutate(offense_score = ifelse(Reset_Team_to_Score == 1, 1, 0)) %>% 
@@ -60,49 +59,43 @@ enp_o_noscore_yd <- EXP_DAT %>%
 
 # For Expected Net Points until End of Half using V_k recursive
 ko_P_o <- KOFF %>%
-  mutate(offense_score = ifelse(Reset_Team_to_Score == 1, 1, 0)) %>% 
-  group_by(Yfog) %>%
-  summarise(ko_P_o = mean(offense_score))
+  mutate(offense_score = ifelse(Reset_Team_to_Score == 1, 1, 0)) %$%
+  mean(offense_score)
 
 ko_P_d <- KOFF %>% 
-  mutate(defense_score = ifelse(Reset_Team_to_Score == - 1, 1, 0)) %>% 
-  group_by(Yfog) %>%
-  summarise(ko_P_d = mean(defense_score))
+  mutate(defense_score = ifelse(Reset_Team_to_Score == - 1, 1, 0)) %$%
+  mean(defense_score)
 
 ko_enp_o_oscore_yd <- KOFF %>%
-  filter(Reset_Team_to_Score == 1) %>%
-  group_by(Yfog) %>%
-  summarise(ko_enp_o_oscore_yd = mean(Net_Score_to_Reset))
+  filter(Reset_Team_to_Score == 1) %$%
+  mean(Net_Score_to_Reset)
 
 ko_enp_o_dscore_yd <- KOFF %>%
-  filter(Reset_Team_to_Score == -1) %>%
-  group_by(Yfog) %>%
-  summarise(ko_enp_o_dscore_yd = mean(Net_Score_to_Reset))
-
-# Linear interpolation
-d_interp <- ko_enp_o_dscore_yd %$%
-  approx(Yfog, ko_enp_o_dscore_yd, xout = 1:99, method = "constant", rule=2)
-ko_enp_o_dscore_yd <- tibble(Yfog = d_interp$x,
-                             ko_enp_o_dscore_yd = d_interp$y)
+  filter(Reset_Team_to_Score == -1) %$%
+  mean(Net_Score_to_Reset)
 
 ko_enp_o_noscore_yd <- KOFF %>%
-  filter(Reset_Team_to_Score == 0) %>%
-  group_by(Yfog) %>%
-  summarise(ko_enp_o_noscore_yd = mean(Net_Score_to_Reset))
+  filter(Reset_Team_to_Score == 0) %$%
+  mean(Net_Score_to_Reset)
 
-# More linear interpolation
-n_interp <- ko_enp_o_noscore_yd %$%
-  approx(Yfog, ko_enp_o_noscore_yd, xout = 1:99, method = "constant", rule=2)
-ko_enp_o_noscore_yd <- tibble(Yfog = n_interp$x,
-                              ko_enp_o_noscore_yd = n_interp$y)
+V_k_rec <- (ko_P_o * ko_enp_o_oscore_yd +
+            ko_P_d * (- ko_enp_o_dscore_yd) +
+            (1 - ko_P_o - ko_P_d) * ko_enp_o_noscore_yd) /
+            (1 + ko_P_o + ko_P_d)
 
-V_k_rec <- tibble(Yfog = 1:99,
-                  V_k_rec = (eys(ko_P_o) * eys(ko_enp_o_oscore_yd) +
-                    eys(ko_P_d) * (- eys(ko_enp_o_dscore_yd)) +
-                    (1 - eys(ko_P_o) - eys(ko_P_d)) * eys(ko_enp_o_noscore_yd)) /
-                    (1 + eys(ko_P_o) + eys(ko_P_d))
-) 
 ```
+
+# Scalar Variables Table
+
+Variable | Value
+-------- | ----------
+$P(O \;\|\; KO\;1st Down)$ | `r ko_P_o`
+$P(D \;\|\; KO\;1st Down)$ | `r ko_P_d`
+$(ExpPTS_O \;\|\; O, KO)$ | `r ko_enp_o_oscore_yd`
+$(ExpPTS_O \;\|\; D, KO)$ | `r ko_enp_o_dscore_yd`
+$(ExpPTS_O \;\|\; No\;TD/FG, KO)$ | `r ko_enp_o_noscore_yd`
+$V_k$ | `r V_k`
+$V_{k}^rec$ | `r V_k_rec`
 
 \pagebreak
 
@@ -136,18 +129,17 @@ enp_eoh_avg <- EXP_DAT %>%
 
 enp_eoh_vk <- tibble(Yfog = 1:99,
                      enp_eoh_vk = eys(P_o) * (eys(enp_o_oscore_yd) - 
-                       eys(V_k)) -  eys(P_d) * (- eys(enp_o_dscore_yd) + 
-                       eys(V_k)) + (1 - eys(P_o) - eys(P_d)) * 
+                       V_k) -  eys(P_d) * (- eys(enp_o_dscore_yd) + 
+                       V_k) + (1 - eys(P_o) - eys(P_d)) * 
                        (eys(enp_o_noscore_yd))
                      )
 
 enp_eoh_vk_rec <- tibble(Yfog = 1:99,
-                         enp_eoh_vk_rec = eys(ko_P_o) * (eys(ko_enp_o_oscore_yd) 
-                           -  eys(V_k_rec)) -  eys(ko_P_d) * 
-                          (- eys(ko_enp_o_dscore_yd) +  eys(V_k_rec)) + 
-                          (1 - eys(ko_P_o)  - eys(ko_P_d)) *
-                          (eys(ko_enp_o_noscore_yd))
-                        )
+                     enp_eoh_vk_rec = eys(P_o) * (eys(enp_o_oscore_yd) - 
+                       V_k_rec) -  eys(P_d) * (- eys(enp_o_dscore_yd) + 
+                       V_k_rec) + (1 - eys(P_o) - eys(P_d)) * 
+                       (eys(enp_o_noscore_yd))
+                     )
 
 enp_all <- combine_yfog_stats(enp_eoh_avg, enp_eoh_vk, enp_eoh_vk_rec, col_name = "enp")
 
@@ -185,25 +177,6 @@ ggplot(score_prob, aes(Yfog, score_prob, color = variable)) +
        y = "Probability")
 ```
 
-
-```{r, eval=FALSE}
-### Only First and 10/Goal Following Kickoff
-ko_one_min_o_min_d <- tibble(Yfog = 1:99, omomd = 1 - eys(ko_P_o) - eys(ko_P_d))
-ko_score_prob <- combine_yfog_stats(ko_P_o, ko_P_d, ko_one_min_o_min_d, col_name = "ko_score_prob")
-
-ggplot(ko_score_prob, aes(Yfog, ko_score_prob, color = variable)) + 
-  geom_line() + 
-  geom_line() + 
-  geom_line() + 
-  scale_color_manual(name = "Who Scores TD/FG Before Halftime", values = c("black", "blue", "red"),
-                     labels = c("Offense", "Defense",
-                                "No TD/FG Before Half")) + 
-  labs(title = "Prob of Offense/Defense/No One Scoring a TD/FG Before Halftime by Yardline",
-       subtitle = "First and 10s/Goals Following a Kickoff",
-       x = "Yards from Own Goal",
-       y = "Probability")
-```
-
 # Expected Net Points Conditional
 
 
@@ -227,44 +200,6 @@ ggplot(enp_cond_all, aes(Yfog, enp_cond, color = variable)) +
 ```
 
 
-```{r, eval=FALSE}
-### Only First and 10/Goal Following Kickoff
-ko_enp_cond_all <- combine_yfog_stats(ko_enp_o_oscore_yd, ko_enp_o_dscore_yd, 
-                                      ko_enp_o_noscore_yd, 
-                                   col_name = "ko_enp_cond")
-
-ggplot(ko_enp_cond_all, aes(Yfog, ko_enp_cond, color = variable)) + 
-  geom_line() + 
-  geom_line() + 
-  geom_line() + 
-  scale_color_manual(name = "Who Scores TD/FG Before Halftime",
-                     values = c("black", "blue", "red"),
-                     labels = c("Offense", "Defense",
-                                "No TD/FG Before Half")) + 
-  labs(title = "Conditional Expected Net Points for Offense by Yard Line",
-       subtitle = "First and 10s/Goals Following a Kickoff",
-       x = "Yards from Own Goal",
-       y = "Expected Net Points (Offense)")
-```
-
-# $V_k$ and $V_{k}^{rec}$
-
-```{r}
-all_v_k <- combine_yfog_stats(V_k, V_k_rec, col_name = "v_k")
-
-ggplot(all_v_k, aes(Yfog, v_k, color = variable)) + 
-  geom_line() + 
-  geom_line() + 
-  geom_line() + 
-  scale_color_manual(name = expression(V[k] ~ Types),
-                     values = c("black", "blue"),
-                     labels = c("Normal", "Recursive")) + 
-  labs(title = expression(V[k] ~ by ~ Yardline),
-       x = "Yards from Own Goal",
-       y = "Expected Net Points until End of Half (Offense)")
-```
-
-
 
 ```{r create_csv}
 # g1 col a = enp(x) normal way mean (to the half)
@@ -275,13 +210,32 @@ ggplot(all_v_k, aes(Yfog, v_k, color = variable)) +
 # g3 col g = (ExpNetPTS_O | O, yrdline = x)
 # g3 col h = (ExpNetPTS_O | D, yrdline = x)
 # g3 col i = (ExpNetPTS_O | No TD/FG, yrdline = x) 
-# g4 col j = V_k ^ rec
-# g4 col k = V_k
+obs_enp_eoh_avg <- EXP_DAT %>%
+  group_by(Yfog) %>%
+  summarise(obs_enp_eoh_avg = n())
+
+obs_enp_o_oscore_yd <- EXP_DAT %>%
+  filter(Reset_Team_to_Score == 1) %>%
+  group_by(Yfog) %>%
+  summarise(obs_enp_o_oscore_yd = n())
+
+obs_enp_o_dscore_yd <- EXP_DAT %>%
+  filter(Reset_Team_to_Score == -1) %>%
+  group_by(Yfog) %>%
+  summarise(obs_enp_o_dscore_yd = n())
+
+obs_enp_o_noscore_yd <- EXP_DAT %>%
+  filter(Reset_Team_to_Score == 0) %>%
+  group_by(Yfog) %>%
+  summarise(obs_enp_o_noscore_yd = n())
 output_csv <- combine_yfog_stats(enp_eoh_avg, enp_eoh_vk, enp_eoh_vk_rec, 
                                  P_o, P_d, one_min_o_min_d, enp_o_oscore_yd,
-                                 enp_o_dscore_yd, enp_o_noscore_yd, V_k, 
-                                 V_k_rec, col_name = NA, melt = FALSE) %>%
-  rename(`ENP Normal` = enp_eoh_avg,
+                                 enp_o_dscore_yd, enp_o_noscore_yd, 
+                                 obs_enp_eoh_avg,  
+                                 obs_enp_o_oscore_yd, obs_enp_o_dscore_yd,
+                                 obs_enp_o_noscore_yd,
+                                 col_name = NA, melt = FALSE) %>%
+  rename(`ENP Normal (Average)` = enp_eoh_avg,
          `ENP V_k` = enp_eoh_vk,
          `ENP V_k Recursive` = enp_eoh_vk_rec,
          `Prob O Scores TD/FG` = P_o,
@@ -290,7 +244,10 @@ output_csv <- combine_yfog_stats(enp_eoh_avg, enp_eoh_vk, enp_eoh_vk_rec,
          `ENP_O | O, yrdline = x` = enp_o_oscore_yd,
          `ENP_O | D, yrdline = x` = enp_o_dscore_yd,
          `ENP_O | No TD/FG, yrdline = x` = enp_o_noscore_yd,
-         `V_k recursive` = V_k_rec
+         `# Obs ENP Normal (Average)` = obs_enp_eoh_avg,
+         `# Obs (ENP_O | O, yrdline = x)` = obs_enp_o_oscore_yd,
+         `# Obs (ENP_O | D, yrdline = x)` = obs_enp_o_dscore_yd,
+         `# Obs (ENP_O | No TD/FG, yrdline = x)` = obs_enp_o_noscore_yd
          ) %>%
   write_csv("enp_methods_output.csv")
 ```
