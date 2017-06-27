@@ -81,7 +81,7 @@ ko_enp_o_noscore_yd <- KOFF %>%
 V_k_rec <- (ko_P_o * ko_enp_o_oscore_yd +
             ko_P_d * (- ko_enp_o_dscore_yd) +
             (1 - ko_P_o - ko_P_d) * ko_enp_o_noscore_yd) /
-            (1 + ko_P_o + ko_P_d)
+            (1 + ko_P_o - ko_P_d)
 
 ```
 
@@ -256,7 +256,7 @@ output_csv <- combine_yfog_stats(enp_eoh_avg, enp_eoh_vk, enp_eoh_vk_rec,
 
 $$
 V_{k} ^ {rec} = \frac{Prob(O\; |\;KO) * ExpPTS_O + Prob(D\;|\;KO) * (- ExpPTS_O) + 
-[1 - Prob(O\;|\;KO) - Prob(D\;|\;KO)] * ExpNetPTS}{1}
+[1 - Prob(O\;|\;KO) - Prob(D\;|\;KO)] * ExpNetPTS}{1 + Prob(O\;|\;KO) - Prob(D\;|\;KO)}
 $$
 
 $$
