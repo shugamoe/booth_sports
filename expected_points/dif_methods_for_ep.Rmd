@@ -63,7 +63,7 @@ ko_P_o <- KOFF %>%
   mean(offense_score)
 
 ko_P_d <- KOFF %>% 
-  mutate(defense_score = ifelse(Reset_Team_to_Score == - 1, 1, 0)) %$%
+  mutate(defense_score = ifelse(Reset_Team_to_Score == -1, 1, 0)) %$%
   mean(defense_score)
 
 ko_enp_o_oscore_yd <- KOFF %>%
@@ -79,7 +79,7 @@ ko_enp_o_noscore_yd <- KOFF %>%
   mean(Net_Score_to_Reset)
 
 V_k_rec <- (ko_P_o * ko_enp_o_oscore_yd +
-            ko_P_d * (- ko_enp_o_dscore_yd) +
+            ko_P_d * (ko_enp_o_dscore_yd) +
             (1 - ko_P_o - ko_P_d) * ko_enp_o_noscore_yd) /
             (1 + ko_P_o - ko_P_d)
 
