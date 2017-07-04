@@ -19,6 +19,35 @@ calc_min_in_half <- function(play_row){
   }
 }
 
+# Calculates the length of the play in minutes
+calc_play_length <- function(play_row){
+  play_after <- PLAYS_DF %>%
+    filter(gid == play_row$gid,
+           pid == play_row$pid + 1)
+  
+  if (nrow(play_after) == 0){
+    play_row$min_in_half 
+  } else {
+    play_after$min_in_half - play_row$min_in_half
+  }
+}
+
+calc_net_scores <- function(play_row, off_of_int){
+  # browser()
+  if (off_of_int == play_row$off){
+    return(play_row$pts)
+  } else if (off_of_int == play_row$def){
+    return(- play_row$pts)
+  } else {
+    if (play_row$pts != 0){
+      print('welp...')
+    }
+    # browser()
+    return(play_row$pts)
+  }
+}
+
+
 GAMES_DF <- read_csv('nfl_00_16/GAME.csv') %>%
   dplyr::select(gid, h, seas, wk)
 PLAYS_DF <- read_csv('nfl_00_16/PLAY.csv') %>%
@@ -27,9 +56,11 @@ PLAYS_DF <- read_csv('nfl_00_16/PLAY.csv') %>%
                                     15 + min + sec / 60, -100)),
         min_in_game = ifelse(qtr %in% c(3,4), min_in_half, 
                              ifelse(qtr %in% c(1, 2), 30 + min_in_half, -1))) %>% # Not using overtime
- merge(GAMES_DF, ., by = 'gid')
- PLAYS_DF$min_in_half <- as.numeric(PLAYS_DF$min_in_half)
- 
+ merge(GAMES_DF, ., by = 'gid') %>%
+ by_row(calc_play_length, .collate = "cols", .to = "min_in_play")
+
+PLAYS_DF$min_in_half <- as.numeric(PLAYS_DF$min_in_half)
+
 extract_game_plays_df <- function(plays_df, game_id){
   (plays_df %>% filter(gid == game_id))
 }
@@ -51,6 +82,12 @@ calc_net_score_info <- function(play_row, game_tracker){
                             play_row$qtr))) %>%
     by_row(calc_net_scores, off_of_int = play_row$off,
                 .collate = "cols", .to = "net_score") 
+  
+  # Get the pass or rush plays from the current offense
+  cur_off_to_half <- search_df %>%
+    filter(off == play_row$off) %>%
+    mutate(pass_or_rush <- ifelse(type %in% c("PASS", "RUSH"), T,F ),
+           rush <- ifelse(type == "RUSH", T, F))
   
   # We don't count a safety as a reset, only FGs and TD's + extra point(s)
   fg_td_only <- search_df %>%
@@ -114,11 +151,23 @@ calc_net_score_info <- function(play_row, game_tracker){
     Reset_Team_to_Score <- 0
   }
   
+  cur_off_to_reset <- cur_off_to_half %>%
+    filter(pid <= reset_play$pid)
+  reset_avg_time_per_play <- sum(cur_off_to_reset$min_in_play) / nrow(cur_off_to_reset)
+  reset_perct_rush <- 100 * sum(cur_off_to_reset$rush) / sum(cur_off_to_reset$pass_or_rush)
+  
   net_till_half_score <- sum(search_df$net_score)
-  (net_score_info <- as.numeric(c(net_till_half_score, net_till_reset_score, 
+  half_avg_time_per_play <- sum(cur_off_to_half$min_in_play) / nrow(cur_off_to_half)
+  half_perct_rush <- 100 * sum(cur_off_to_half$rush) / sum(cur_off_to_half$pass_or_rush)
+  (net_score_info <- as.numeric(c(net_till_half_score,
+                                  net_till_reset_score, 
                                   reset_min_in_half, 
                                   time_to_reset, 
-                                  Reset_Team_to_Score)))
+                                  Reset_Team_to_Score,
+                                  reset_avg_time_per_play,
+                                  reset_perct_rush,
+                                  half_avg_time_per_play,
+                                  half_perct_rush)))
 }
 
 calc_koff_info <- function(play_row, game_tracker, test = FALSE){
@@ -273,20 +322,6 @@ calc_koff_info <- function(play_row, game_tracker, test = FALSE){
   }
 }
 
-calc_net_scores <- function(play_row, off_of_int){
-  # browser()
-  if (off_of_int == play_row$off){
-    return(play_row$pts)
-  } else if (off_of_int == play_row$def){
-    return(- play_row$pts)
-  } else {
-    if (play_row$pts != 0){
-      print('welp...')
-    }
-    # browser()
-    return(play_row$pts)
-  }
-}
 
 make_raw_exp_scores_table <- function(test = FALSE, plays_df){
   if (test){
@@ -372,7 +407,7 @@ make_off_won_binary <- function(play_row, game_tracker = GAME_TRACKER){
   }
 }
 
-first_and_tens <- make_raw_exp_scores_table(test = TRUE, plays_df = PLAYS_DF) %>%
+first_and_tens <- make_raw_exp_scores_table(test = FALSE, plays_df = PLAYS_DF) %>%
   dplyr::mutate(reset_min_in_game = ifelse(qtr %in% c(1, 2), 30 + ex_score_info3,
                                     ifelse(qtr %in% c(3, 4), ex_score_info3,
                                            NA)),
@@ -388,6 +423,10 @@ first_and_tens <- make_raw_exp_scores_table(test = TRUE, plays_df = PLAYS_DF) %>
          Min_Reset_to_Half = ex_score_info3,
          Time_to_Reset = ex_score_info4,
          Reset_Team_to_Score = ex_score_info5,
+         Reset_Avg_Time_per_Play = ex_score_info6,
+         Reset_Perct_Rush = ex_score_info7,
+         Half_Avg_Time_per_Play = ex_score_info8,
+         Half_Perct_Rush = ex_score_info9,
          Reset_qtr = reset_time_info1,
          Reset_min = reset_time_info2,
          Reset_sec = reset_time_info3,
@@ -444,7 +483,11 @@ first_and_tens <- make_raw_exp_scores_table(test = TRUE, plays_df = PLAYS_DF) %>
   Min_Reset_to_GameEnd,
   Follow_Kickoff,
   Kickoff_Type,
-  Offense_Won) %>%
+  Offense_Won,
+  Reset_Avg_Time_per_Play,
+  Reset_Perct_Rush,
+  Half_Avg_Time_per_Play,
+  Half_Perct_Rush) %>%
   # Changes John wants
   mutate(Follow_Kickoff = ifelse(Kickoff_Type == "S", 0, Follow_Kickoff),
          Kickoff_Type = ifelse(is.na(Kickoff_Type), "None", Kickoff_Type))

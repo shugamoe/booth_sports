@@ -129,14 +129,14 @@ enp_eoh_avg <- EXP_DAT %>%
 
 enp_eoh_vk <- tibble(Yfog = 1:99,
                      enp_eoh_vk = eys(P_o) * (eys(enp_o_oscore_yd) - 
-                       V_k) -  eys(P_d) * (- eys(enp_o_dscore_yd) + 
+                       V_k) +  eys(P_d) * (eys(enp_o_dscore_yd) + 
                        V_k) + (1 - eys(P_o) - eys(P_d)) * 
                        (eys(enp_o_noscore_yd))
                      )
 
 enp_eoh_vk_rec <- tibble(Yfog = 1:99,
                      enp_eoh_vk_rec = eys(P_o) * (eys(enp_o_oscore_yd) - 
-                       V_k_rec) -  eys(P_d) * (- eys(enp_o_dscore_yd) + 
+                       V_k_rec) +  eys(P_d) * (eys(enp_o_dscore_yd) + 
                        V_k_rec) + (1 - eys(P_o) - eys(P_d)) * 
                        (eys(enp_o_noscore_yd))
                      )
@@ -149,6 +149,19 @@ ggplot(enp_all, aes(Yfog, enp, color = variable)) +
   geom_line() + 
   scale_color_manual(name = "Net Points Type", values = c("black", "blue", "red"),
                      labels = c("Average", "V_k",
+                                "V_k recursive")) + 
+  labs(title = "Expected Net Points Comparison",
+       subtitle = "Not including average version",
+       x = "Yards from Own Goal",
+       y = "Expected Net Points until End of Half (Offense)")
+
+enp_non_avg <- combine_yfog_stats(enp_eoh_vk, enp_eoh_vk_rec, col_name = "enp", melt = TRUE)
+ggplot(enp_non_avg, aes(Yfog, enp, color = variable)) + 
+  geom_line() + 
+  geom_line() + 
+  geom_line() + 
+  scale_color_manual(name = "Net Points Type", values = c("blue", "red"),
+                     labels = c("V_k",
                                 "V_k recursive")) + 
   labs(title = "Expected Net Points Comparison",
        x = "Yards from Own Goal",
