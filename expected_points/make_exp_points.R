@@ -491,7 +491,7 @@ first_and_tens <- make_raw_exp_scores_table(test = FALSE, plays_df = PLAYS_DF) %
   # Changes John wants
   mutate(Follow_Kickoff = ifelse(Kickoff_Type == "S", 0, Follow_Kickoff),
          Kickoff_Type = ifelse(is.na(Kickoff_Type), "None", Kickoff_Type))
-write_csv(first_and_tens, "raw_fdowns_nscore_half_and_reset.csv")
+write_csv(first_and_tens, "expected_points/raw_fdowns_nscore_half_and_reset.csv")
 
 test_extract_row <- function(pid_of_int, plays_df = PLAYS_DF){
   plays_df %>% filter(pid == pid_of_int) %>%
