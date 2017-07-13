@@ -6,6 +6,67 @@ library(MASS)
 library(purrr)
 library(magrittr)
 
+# Read in raw data
+GAMES_DF <- read_csv('nfl_00_16/GAME.csv') %>%
+  dplyr::select(gid, h, seas, wk)
+PLAYS_DF <- read_csv('nfl_00_16/PLAY.csv') %>%
+ mutate(min_in_half = ifelse(qtr %in% c(2, 4), min + sec / 60,
+                             ifelse(qtr %in% c(1,3),     # -100 shouldn't happen
+                                    15 + min + sec / 60, -100)),
+        min_in_game = ifelse(qtr %in% c(3,4), min_in_half, 
+                             ifelse(qtr %in% c(1, 2), 30 + min_in_half, -1))) %>% # Not using overtime
+ merge(GAMES_DF, ., by = 'gid')
+
+PLAYS_DF$min_in_half <- as.numeric(PLAYS_DF$min_in_half)
+
+FD_SIT_KEY <- as_tibble(
+    rbind(rep(0, 99), diag(1, 99, 99))
+    ) %>%
+  set_names(paste0(rep("situation_", 99), 1:99)) %>%
+  bind_cols(yfog = 0:99, .)
+
+KICK_SIT_KEY <- rbind(
+  matrix(rep(c(1, 0, 0), 11), nrow = 11, byrow = TRUE),
+  matrix(rep(c(0, 1, 0), 5), nrow = 5, byrow = TRUE),
+  matrix(c(0, 0, 1), nrow = 1, byrow = TRUE)) %>%
+  as_tibble() %>%
+  set_names(paste0(rep("situation_", 3), 100:102)) %>%
+  bind_cols(seas = 2000:2016, type = rep("KOFF", length(2000:2016)), .)
+
+
+extract_situations <- function(plays_df = PLAYS_DF){
+  romer_df <- plays_df %>%
+    filter((dwn == 1 & (ytg == 10 | yfog >= 90)) |
+             (type == "KOFF")) %T>%
+    str() %>%
+    merge(FD_SIT_KEY, all.x = TRUE) %>%
+    merge(KICK_SIT_KEY, all.x = TRUE) %>%
+    mutate_at(.vars = vars("situation_100",
+                        "situation_101",
+                        "situation_102"),
+              .funs = funs(ifelse(is.na(.), 0, .)))
+  
+  last_sits <- romer_df %>%
+    group_by(gid) %>%
+    summarise(pid = max(pid)) %>%
+    mutate(last_sit = 1)
+  
+  other_sits <- romer_df %>%
+    filter(!(pid %in% last_sits$pid)) %>%
+    dplyr::select(pid) %>%
+    mutate(last_sit = 1)
+  
+  last_sit_key <- bind_rows(last_sits, other_sits)
+  
+  romer_df <- romer_df %>%
+    merge(last_sit_key, all.x = TRUE) %>%
+    mutate(off_lead = lead(off))
+     
+  romer_df
+}
+
+
+### Leftover from make_exp_score.R
 calc_min_in_half <- function(play_row){
   qtr <- play_row$qtr
   min <- play_row$min
@@ -48,20 +109,10 @@ calc_net_scores <- function(play_row, off_of_int){
 }
 
 
-GAMES_DF <- read_csv('nfl_00_16/GAME.csv') %>%
-  dplyr::select(gid, h, seas, wk)
-PLAYS_DF <- read_csv('nfl_00_16/PLAY.csv') %>%
- mutate(min_in_half = ifelse(qtr %in% c(2, 4), min + sec / 60,
-                             ifelse(qtr %in% c(1,3),     # -100 shouldn't happen
-                                    15 + min + sec / 60, -100)),
-        min_in_game = ifelse(qtr %in% c(3,4), min_in_half, 
-                             ifelse(qtr %in% c(1, 2), 30 + min_in_half, -1))) %>% # Not using overtime
- merge(GAMES_DF, ., by = 'gid')
 
 # PLAYS_DF <- PLAYS_DF %>%
 #  by_row(calc_play_length, .collate = "cols", .to = "min_in_play", plays_df = PLAYS_DF)
 
-PLAYS_DF$min_in_half <- as.numeric(PLAYS_DF$min_in_half)
 
 extract_game_plays_df <- function(plays_df, game_id){
   (plays_df %>% filter(gid == game_id))
@@ -409,99 +460,100 @@ make_off_won_binary <- function(play_row, game_tracker = GAME_TRACKER){
   }
 }
 
-first_and_tens <- make_raw_exp_scores_table(test = TRUE, plays_df = PLAYS_DF) %>%
-  dplyr::mutate(reset_min_in_game = ifelse(qtr %in% c(1, 2), 30 + ex_score_info3,
-                                    ifelse(qtr %in% c(3, 4), ex_score_info3,
-                                           NA)),
-         Playoff = ifelse(wk >= 17, 1, 0)) %T>%
-  print("Converting reset time", null = .) %>%
-  by_row(convert_reset_time, .collate = "cols", .to = "reset_time_info") %T>%
-  print("Making won playoff binary", null = .) %>%
-  by_row(make_off_won_binary, .collate = "cols", .to = "Offense_Won") %T>%
-  print("Renaming vars", null = .) %>%                            # Reset min in half
-  rename(# Time variables
-         Net_Score_to_Half = ex_score_info1,
-         Net_Score_to_Reset = ex_score_info2,
-         Min_Reset_to_Half = ex_score_info3,
-         Time_to_Reset = ex_score_info4,
-         Reset_Team_to_Score = ex_score_info5,
-         Reset_Avg_Time_per_Play = ex_score_info6,
-         Reset_Perct_Rush = ex_score_info7,
-         Half_Avg_Time_per_Play = ex_score_info8,
-         Half_Perct_Rush = ex_score_info9,
-         Reset_qtr = reset_time_info1,
-         Reset_min = reset_time_info2,
-         Reset_sec = reset_time_info3,
-         # Other stuff John wants renamed
-         Season = seas,
-         Week = wk,
-         Armchair_gid = gid,
-         Armchair_pid = pid,
-         Qtr = qtr,
-         Min = min,
-         Sec = sec,
-         Min_left_in_half = min_in_half,
-         Min_left_in_game = min_in_game,
-         Pts_Off = ptso,
-         Pts_Def = ptsd,
-         Off = off,
-         Def = def,
-         Home = h,
-         Yfog = yfog,
-         Armchair_dsq = dseq,
-         Drive_start = drive_start,
-         Min_Reset_to_GameEnd = reset_min_in_game,
-         Follow_Kickoff = koff_info1,
-         Kickoff_Type = koff_info2
-         ) %T>%
-  print("Selecting Vars", null = .) %>%
-  dplyr::select(
-  Season,
-  Week,
-  Playoff,
-  Armchair_gid,
-  Armchair_pid,
-  Qtr,
-  Min,
-  Sec,
-  Min_left_in_half,
-  Min_left_in_game,
-  Pts_Off,
-  Pts_Def,
-  Off,
-  Def,
-  Home,
-  Yfog,
-  Armchair_dsq,
-  Drive_start,
-  Net_Score_to_Half,
-  Net_Score_to_Reset,
-  Reset_Team_to_Score,
-  Reset_qtr,
-  Reset_min,
-  Reset_sec,
-  Time_to_Reset,
-  Min_Reset_to_Half,
-  Min_Reset_to_GameEnd,
-  Follow_Kickoff,
-  Kickoff_Type,
-  Offense_Won,
-  Reset_Avg_Time_per_Play,
-  Reset_Perct_Rush,
-  Half_Avg_Time_per_Play,
-  Half_Perct_Rush) %>%
-  # Changes John wants
-  mutate(Follow_Kickoff = ifelse(Kickoff_Type == "S", 0, Follow_Kickoff),
-         Kickoff_Type = ifelse(is.na(Kickoff_Type), "None", Kickoff_Type))
-# write_csv(first_and_tens, "expected_points/raw_fdowns_nscore_half_and_reset.csv")
-
-test_extract_row <- function(pid_of_int, plays_df = PLAYS_DF){
-  plays_df %>% filter(pid == pid_of_int) %>%
-    tail(1)
-}
-
-test_show_context <- function(pid_of_int, plays_df = PLAYS_DF){
-  print(plays_df %>% filter(pid < pid_of_int + 15, pid > pid_of_int - 15) %>%
-          dplyr::select(type, dwn, ytg, qtr, pts, pid, gid))
-  print(pid_of_int)
-}
+# 
+# first_and_tens <- make_raw_exp_scores_table(test = TRUE, plays_df = PLAYS_DF) %>%
+#   dplyr::mutate(reset_min_in_game = ifelse(qtr %in% c(1, 2), 30 + ex_score_info3,
+#                                     ifelse(qtr %in% c(3, 4), ex_score_info3,
+#                                            NA)),
+#          Playoff = ifelse(wk >= 17, 1, 0)) %T>%
+#   print("Converting reset time", null = .) %>%
+#   by_row(convert_reset_time, .collate = "cols", .to = "reset_time_info") %T>%
+#   print("Making won playoff binary", null = .) %>%
+#   by_row(make_off_won_binary, .collate = "cols", .to = "Offense_Won") %T>%
+#   print("Renaming vars", null = .) %>%                            # Reset min in half
+#   rename(# Time variables
+#          Net_Score_to_Half = ex_score_info1,
+#          Net_Score_to_Reset = ex_score_info2,
+#          Min_Reset_to_Half = ex_score_info3,
+#          Time_to_Reset = ex_score_info4,
+#          Reset_Team_to_Score = ex_score_info5,
+#          Reset_Avg_Time_per_Play = ex_score_info6,
+#          Reset_Perct_Rush = ex_score_info7,
+#          Half_Avg_Time_per_Play = ex_score_info8,
+#          Half_Perct_Rush = ex_score_info9,
+#          Reset_qtr = reset_time_info1,
+#          Reset_min = reset_time_info2,
+#          Reset_sec = reset_time_info3,
+#          # Other stuff John wants renamed
+#          Season = seas,
+#          Week = wk,
+#          Armchair_gid = gid,
+#          Armchair_pid = pid,
+#          Qtr = qtr,
+#          Min = min,
+#          Sec = sec,
+#          Min_left_in_half = min_in_half,
+#          Min_left_in_game = min_in_game,
+#          Pts_Off = ptso,
+#          Pts_Def = ptsd,
+#          Off = off,
+#          Def = def,
+#          Home = h,
+#          Yfog = yfog,
+#          Armchair_dsq = dseq,
+#          Drive_start = drive_start,
+#          Min_Reset_to_GameEnd = reset_min_in_game,
+#          Follow_Kickoff = koff_info1,
+#          Kickoff_Type = koff_info2
+#          ) %T>%
+#   print("Selecting Vars", null = .) %>%
+#   dplyr::select(
+#   Season,
+#   Week,
+#   Playoff,
+#   Armchair_gid,
+#   Armchair_pid,
+#   Qtr,
+#   Min,
+#   Sec,
+#   Min_left_in_half,
+#   Min_left_in_game,
+#   Pts_Off,
+#   Pts_Def,
+#   Off,
+#   Def,
+#   Home,
+#   Yfog,
+#   Armchair_dsq,
+#   Drive_start,
+#   Net_Score_to_Half,
+#   Net_Score_to_Reset,
+#   Reset_Team_to_Score,
+#   Reset_qtr,
+#   Reset_min,
+#   Reset_sec,
+#   Time_to_Reset,
+#   Min_Reset_to_Half,
+#   Min_Reset_to_GameEnd,
+#   Follow_Kickoff,
+#   Kickoff_Type,
+#   Offense_Won,
+#   Reset_Avg_Time_per_Play,
+#   Reset_Perct_Rush,
+#   Half_Avg_Time_per_Play,
+#   Half_Perct_Rush) %>%
+#   # Changes John wants
+#   mutate(Follow_Kickoff = ifelse(Kickoff_Type == "S", 0, Follow_Kickoff),
+#          Kickoff_Type = ifelse(is.na(Kickoff_Type), "None", Kickoff_Type))
+# # write_csv(first_and_tens, "expected_points/raw_fdowns_nscore_half_and_reset.csv")
+# 
+# test_extract_row <- function(pid_of_int, plays_df = PLAYS_DF){
+#   plays_df %>% filter(pid == pid_of_int) %>%
+#     tail(1)
+# }
+# 
+# test_show_context <- function(pid_of_int, plays_df = PLAYS_DF){
+#   print(plays_df %>% filter(pid < pid_of_int + 15, pid > pid_of_int - 15) %>%
+#           dplyr::select(type, dwn, ytg, qtr, pts, pid, gid))
+#   print(pid_of_int)
+# }

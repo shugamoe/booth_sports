@@ -1,0 +1,362 @@
+---
+title: "Pitch FX Initial Analysis"
+author: "Julian McClellan"
+date: "July 4, 2017"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Pitch FX Data Creation
+
+The data collection feature utilized in `PitchFX_SeasonLoop.r` utilizes a somewhat hackish implementation\*\* to gather 2014, 2015, and 2016 information. If we're going to be utilizing more of this data, it's possible to gather *all* available information (~2008 - present) into a SQLite database and then simply "break off" CSV files from this main database.
+
+The file also utilizes a simple join procedure on two tables from the scraped data: `pitch` and `atbat`, which can be easily recreated.
+
+**The students scraped the data week by week instead of whole years at a time because the package
+they utilized only allowed a certain number of games to be collected *without* using a SQL database connection. Instead of using the student's code directly I think it would be better to utilize a SQL database collection method of my own so all of the data is in one place and the scraping code is more decipherable.
+
+## `pitchFX.sample.xlsx` Variables: From `pitch` or `atbat` tables
+
+The variables in `pitchFX.sample.xlsx` that were not created by the students
+come either from the `pitch` and `atbat` tables. While I was unable to find a
+comprehensive key to *all* of the variables, most of them are self explanatory,
+and a good deal of the variables relating to the phyiscal attributes of the
+pitch (velocity, angle, etc. from the `pitch` table) are described at [this website](https://fastballs.wordpress.com/category/pitchfx-glossary/).
+
+## `pitchFX.sample.xlsx` Variables: Created by Students
+
+Simply search for "**" to find concerns or questions within the variables.
+
+#### `First.Pitch`
+
+*Boolean* indicating whether the pitch is the first of the AB.
+
+Checks whether the current pitch count is the same as the previous, if it is,
+defers to previous pitch's `First.Pitch` status, otherwise checks if the count is
+"0-0" and assigns `First.Pitch = 1` if so.
+
+#### `S` (1st/previous Pitch Strike)
+
+*Boolean* indicating whether the first pitch was a strike.
+
+Checks whether the current pitch count is the same as the previous, if it is, defers
+to the previous pitch's `S` status, otherwise checks if the current count is "0-1" and
+whether the previous pitch's `First.Pitch` status is `1` if both these conditions hold,
+then `S = 1`
+
+#### `SS` (1st and 2nd/previous Pitches are Strikes)
+
+*Boolean* indicating whether the current pitch was the second of two strikes.
+
+Construction is analagous to `S`, except it checks if the current count is "0-2" and
+checks whether the previous pitch has: `S  = 1`.
+
+#### `B` (1st/previous Pitch Ball)
+
+*Boolean* indicating whether the first pitch was a ball.
+
+Construction is analagous to `S` except it checks if the current count is "1-0".
+
+#### `BB` (1st and 2nd/previous Pitches are Balls)
+
+*Boolean* indicating whether the current pitch was the second of two balls.
+
+Construction is analagous to `S` except it checks if the current count is "2-0" and
+whether the previous pitch has: `B = 1`.
+
+#### `BBB` (1st, 2nd, and 3rd/previous Pitches are Balls)
+
+*Boolean* indicating whether the current pitch was the third of three balls.
+
+Construction is analagous to `S` except it checks if the current count is "3-0",
+and whether the previous pitch has: `BB = 1`.
+
+#### `BS` (1st Pitch Ball, 2nd/previous Pitch Strike)
+
+*Boolean* indicating a "Ball, Strike" path in the count.
+
+Construction is analagous to `S` except it checks if the current count is "1-1" and
+whether the previous pitch has `B = 1`.
+
+#### `SB` (1st Pitch Strike, 2nd/previous Pitch Ball)
+
+*Boolean* indicating a "Strike, Ball" path in the count.
+
+Construction is analagous to `S` except it checks if the current count is "1-1" and
+whether the previous pitch has `S = 1`.
+
+#### `BSS` (1st Pitch Ball, 2nd Pitch Strike, 3rd/previous Pitch Strike)
+
+*Boolean* indicating a "Ball, Strike, Strike" path in the count.
+
+Construction is analagous to `S` except it checks if the current count is "1-2" and
+whether the previous pitch has `BS = 1`.
+
+#### `SBS` (1st Pitch Strike, 2nd Pitch Ball, 3rd/previous Pitch Strike)
+
+*Boolean* indicating a "Strike, Ball, Strike" path in the count.
+
+Construction is analagous to `S` except it checks if the current count is "1-2" and
+whether the previous pitch has `SB = 1`.
+
+##### `SSB`, `BBS`, `BSB`, `SBB`, `BBBS`, `BBSB`, `BSBB`, `SBBB`, `BBSS`, `BSBS`, `BSSB`, `SBBS`, `SBSB`, `SSBB`, `BBBSS`, `BBSBS`, `BSBBS`,
+`SBBBS`, `BBSSB`, `BSBSB`, `SBBSB`, `BSSBB`, `SBSBB`, `SSBBB`.
+
+*Booleans* for the respective paths.
+
+#### `Path_No`
+
+*Int* indicating which of the above paths was taken to that point in the AB (`1 = First.Pitch`, `2 = S`, etc.).
+
+#### `Path`
+
+*String* indicating which of the above paths was taken to that point in the AB.
+
+#### `Last_Pitch`
+
+*String* indicating what the previous pitch was: a `B`all, `S`trike, or whether
+the current pitch is the `F`irst Pitch.
+
+#### `Count_Last_Pitch`
+
+*String* that concatenates the count last pitch, and the `Last_Pitch` variable:
+
+<balls>-<strikes> | <F | B | S>
+
+#### `BaseRunners`
+
+*String* that indicates the position of the base runners in the following form:
+
+"_ \_ \_" No Base runners
+"1 2 3" Bases Loaded
+"1 \_ \_" Runner on First Only
+etc.
+
+Constructed by comparing the status of the individual baserunner columns `on_1b`, `on_3b`, and `on_2b`,
+to give a "one column" summary of the runners on base situation.
+
+#### `Hit_AB`**
+
+*Boolean* indicating whether there was a hit on the AB. Counts singles, doubles, triples, fan interference, and "HomeRrun".
+
+**The "HomeRrun" typo may have caused some issues in their analysis.
+
+#### `Hit_Pitch`
+
+*Boolean* indicating whether the current pitch was hit or not. Constructed by making sure `Hit_AB = 1` and
+that `type = X`. (`type` is included in the pitchFX data indicating whether the current pitch was a `B`all, `S`trike, or that the pitch was hit.)
+
+#### `Total_Bases_AB`
+
+*Int* indicating the total bases the batter gained at the current AB. Constructed by counting singles as 1, doubles as 2, triples as 3, home runs as 4, and fan interference as 2.
+
+This is done utilizing a nested IF statement that counts a "Double" as 3, but
+only after it counts a "Double" as 2 first, thus the typo will never have a
+chance to cause issues in the the variable.
+
+#### `Total_Bases_BB_AB`
+
+*Int* indicating the total bases the batter gained at the current AB or by being
+walked (BB). Constructed by simply adding the `BB_AB` column and the
+`Total_Bases_AB` column.
+
+#### `Total_Bases_Pitch`
+
+*Int* indicating the total bases the batter gained from the current pitch. Constructed by multiplying: `Hit_Pitch` * `Total_Bases_AB`.
+
+#### `Total_Bases_BB_Pitch`
+
+*Int* indicating the total bases the batter gained from the current pitch, including walks. Constructed by adding: `Total_Bases_Pitch` + `BB_Pitch` 
+
+#### `K_AB`
+
+*Boolean* indicating whether the batter struckout at the AB. Includes
+"Strikeout" and "Strikeout - DP" (the latter does not appear in the sample data,
+raises the question as to whether "Strikeout - TP" appears in larger data).
+
+#### `BIP_Out_AB` and its constituents
+
+*Boolean* indicating a "Ball in Play Out At Bat". Is 1 only if there is no:
+
+
+`Fringe_AB` (Runner out, Batter Interference, Catcher Interference)
+`SAC_AB` (Sac Fly DP, Sac Bunt, Sac Fly)
+`BB_AB` (Hit By Pitch, Walk)
+`S_AB` (Single)
+`D_AB` (Double, Fan interference)
+`T_AB` (Triple)
+`HR_AB` (Home Run)
+`OB_AB` (On Base)
+
+#### `<Event>_Pitch`
+
+*Boolean* indicating that an even took place on this pitch.
+
+`Strike_Pitch` = `1` if the `type` of pitch *is* `B` or `S` and the
+`des`cription is: "In play, out(s)", "Called Strike", "In play, no out",
+"Swinging Strike", "In play, run(s)", "Swinging Strike (Blocked)", "Missed
+Bunt", or "Swinging Pitchout".
+
+`Foul_Pitch` = `1` if the `type` of pitch *is* `B` or `S` and the `des`cription
+is: "Foul", "Foul Bunt", or "Foul (Runner Going)".
+
+`Ball_Pitch` = `1` if the `type` of pitch *is* `B` or `S` and the  `des`cription
+is: "Ball", "Hit By Pitch", "Ball In Dirt", "Intent", "Pitchout", or "Automatic
+Ball".
+
+`K_Pitch` =  `1` if `K_AB` (previous) and `End_PA` are both `1`. (`K_AB` * `End_PA`)
+
+`BIP_Out_Pitch` = `1` if `BIP_Out_AB` and `END_PA` are both `1`. (`BIP_Out_AB` * `End_PA`)
+
+`Fringe_Pitch`, `SAC_Pitch`, `BB_Pitch`, `S_Pitch`, `D_Pitch`, `T_Pitch`, `HR_Pitch` `OB_Pitch`= `1` if 
+the respective `AB` variable and `End_PA` variables are both `1`. (`<Event>_AB` * `End_PA`)
+
+#### `End_PA` (End of Plate Appearance)
+
+*Boolean* indicating the end of the batter's plate apperance.
+
+Constructed to be `1` only if the pitch `type` *is not* a `B`all or `S`trike, but instead `X` (for hit).
+
+#### `End_AB`
+
+*Boolean* indicating the end of an at bat.
+
+Constructed to be `1` if `End_PA` is `1` and `event` is not "Hit By Pitch", "Intent Walk", "Walk", 
+"Catcher Interference", "Sac Bunt", "Sac Fly", or "SacFlyDP".
+
+#### `In_Play`
+
+*Boolean* for whether the ball was in play for the current pitch.
+
+`1` if `type = X`
+
+#### `Strike`**
+
+*Boolean* for whether the current pitch was a strike.
+
+`1` if `type = S | type = X`
+
+**Not sure if should be counting balls hit by players (non-fouls) as strikes.
+
+#### `Ball`
+
+*Boolean* for whether current pitch was a ball.
+
+`1` if `type = B`
+
+#### `Pitch_Counter`
+
+*Int* that is `1` everywhere, probably used to count stuff.
+
+#### `AB Lookup`
+
+*String* to identify the AB.
+
+Constructed as a concatenation of the `gameday link` and `num` vars. The first is a tracker for the game,
+and the second a tracker for the AB # in the game.
+
+#### `AB_Lag`
+
+*String* to identify the previous AB.
+
+#### `Outs`
+
+*Int* indicating the current number of outs for the current pitch.
+
+The constructed dataset provides its own `o`ut variable, but that variable
+actually corresponds to how many `o`uts there will be when the batter ends their plate appearance.
+Thus, this variable looks at the previous batter (`num`) and checks that level of outs. Of course,
+it is possible the previous batter was the 3rd out of the last inning (of the
+last game possibly) in which case, the use of Excel's MOD (IFERROR) function makes `Outs = 0`.
+
+Excel Formula:
+IFERROR(MOD(INDEX(BC:BC,MATCH(\$FB7,\$FA:$FA,0)),3),0)
+
+#### `Home`
+
+*Int* indicating the runs from the home team for the current pitch.
+
+Like `o`, the constructed dataset provides `home_team_runs`, but it corresponds to how many
+runs the home team has when the batter ends their plate appearance. Thus, the
+calculation looks at the previous batter (`num`) and checks the home team runs then. Of course,
+it's possible the previous batter was the last batter of the previous game, in which case the use of Excel's IFERROR function makes `home_team_runs = 0`.
+
+Excel Formula:
+=IFERROR(INDEX(BO:BO,MATCH(\$FB7\$FA:$FA,0)),0)
+
+#### `Away`
+
+Analagous to `Home` above.
+
+#### `Difference`**
+
+*Int* indicating `Home` - `Away`
+
+**The excel formula below constrains the maximum net difference to be +-4.
+
+Excel Formula:
+=MIN(MAX(FD7-FE7,-4),4)
+
+#### `Leverage_Situation`
+
+*String* that is a concatenation of the top/bottom status of the inning, the
+inning, the `BaseRunners`, the `Outs`, and `Difference`.
+
+For example:
+"top_1 \_ \_ \_1_0" Top of the first, no one on base, one out, tie game.
+
+#### `Leverage`
+
+*Float* Showing the "leverage" statistic for the current pitch situation. According to the student paper:
+
+> Leverage Index is an aggregation of inning, outs, baserunners, and score
+differential that approximates the relative importante of a situation in
+determining the outcome of the game.
+
+Constructed by referencing a pre-constructed sheet "Leverage" that contains 
+leverage values for different values of `Leverage_Situation`.
+
+Excel Formula:
+=INDEX($Leverage.$U$3:$U$3890,MATCH(FG7,$Leverage.$T$3:$T$3890,0),1)
+
+#### `Batters 80%`**
+
+*Boolean* indicating unknown quality of batter?
+
+**The construction of this variable references an online .xlsb file.
+
+Excel Formula:
+=INDEX('https://d.docs.live.net/Users/bradl/Documents/R/PitchFX/Reports/PitchFX Truncated Pivot 2016.xlsb'#\$'Batter 80%'.\$C\$1:\$C\$1048576,MATCH(BZ2,'https://d.docs.live.net/Users/bradl/Documents/R/PitchFX/Reports/PitchFX Truncated Pivot 2016.xlsb'#\$'Batter 80%'.\$B\$1:\$B\$1048576,0))
+
+#### `Batters_100`
+
+*Boolean* indicating whether or not to "include" a Batter.
+
+Constructed by referencing a pre-constructed sheet "Batters_Include". The name of the batter is referenced to this sheet to see if the `Include` column in "Batters_Include" is `1` or `0`.
+
+#### `Pitchers_100`
+
+*Boolean* indicating whether or not to "include" a Pitcher.
+
+Construction is analagous to `Batters_100` except "Pitchers_Include" is referenced and only pitchers with an $ERA \leq 15$ are included.
+
+#### `Include`
+
+*Boolean* indicating whether or not to "include" the current pitch.
+
+Constructed by taking `Batters_100` * `Pitchers_100`
+
+#### `FIP` (Field Independent Pitching)
+
+*Float* indicating the current pitcher's Field Independent Pitching.
+
+Constructed by referencing the pre-constructed table "FIP ERA".
+
+#### `ERA`
+
+*Float* indicating the current pticher's Field Independent Pitching.
+
+Also constructed by refereencing the table "FIP ERA"
