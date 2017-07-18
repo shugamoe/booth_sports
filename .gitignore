@@ -4,3 +4,5 @@
 .Ruserdata
 booth_sports.Rproj
 
+*.sqlite
+*.csv

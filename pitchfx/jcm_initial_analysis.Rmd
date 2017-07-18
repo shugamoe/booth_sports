@@ -122,9 +122,7 @@ the current pitch is the `F`irst Pitch.
 
 #### `Count_Last_Pitch`
 
-*String* that concatenates the count last pitch, and the `Last_Pitch` variable:
-
-<balls>-<strikes> | <F | B | S>
+*String* that concatenates the count last pitch, and the `Last_Pitch` variable.
 
 #### `BaseRunners`
 

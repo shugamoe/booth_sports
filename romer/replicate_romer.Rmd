@@ -5,9 +5,18 @@ date: "July 13, 2017"
 output: pdf_document
 ---
 
-```{r setup, include=FALSE}
+```{r setup, include=FALSE, message=FALSE}
+library(tidyverse)
 knitr::opts_chunk$set(echo = TRUE)
 ROMER_DAT <- read_csv("romer_data.csv")
+```
+
+```{r reg_funcs}
+filter_romer <- function(df, seasons, quarters){
+  df %>%
+    filter(seas %in% seasons,
+           qtr %in% quarters)
+}
 ```
 
 ## Estimated Value of Situations 

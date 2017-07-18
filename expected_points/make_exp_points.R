@@ -47,6 +47,10 @@ calc_net_scores <- function(play_row, off_of_int){
   }
 }
 
+create_drive_num_key_single <- function(fpid, fpid_lead, uid){
+  tibble(Drive_num = rep(uid, fpid_lead - fpid),
+         Armchair_pid = fpid:(fpid_lead - 1))
+}
 
 GAMES_DF <- read_csv('nfl_00_16/GAME.csv') %>%
   dplyr::select(gid, h, seas, wk)
@@ -62,6 +66,11 @@ PLAYS_DF <- read_csv('nfl_00_16/PLAY.csv') %>%
 #  by_row(calc_play_length, .collate = "cols", .to = "min_in_play", plays_df = PLAYS_DF)
 
 PLAYS_DF$min_in_half <- as.numeric(PLAYS_DF$min_in_half)
+
+DRIVE_KEY <- read_csv("nfl_00_16/DRIVE.csv") %>%
+  mutate(fpid_lead = lead(fpid, default = max(PLAYS_DF$pid))) %>%
+  dplyr::select(fpid, fpid_lead, uid) %>%
+  pmap_df(create_drive_num_key_single)
 
 extract_game_plays_df <- function(plays_df, game_id){
   (plays_df %>% filter(gid == game_id))
@@ -492,8 +501,15 @@ first_and_tens <- make_raw_exp_scores_table(test = TRUE, plays_df = PLAYS_DF) %>
   Half_Perct_Rush) %>%
   # Changes John wants
   mutate(Follow_Kickoff = ifelse(Kickoff_Type == "S", 0, Follow_Kickoff),
-         Kickoff_Type = ifelse(is.na(Kickoff_Type), "None", Kickoff_Type))
+         Kickoff_Type = ifelse(is.na(Kickoff_Type), "None", Kickoff_Type)) %>%
+  merge(DRIVE_KEY, all.x = T) %>%
+  mutate(Half_num = ifelse(Qtr %in% c(1,2), (Armchair_gid - 1) * 2 + 1,
+                           Armchair_gid * 2)) %>%
+  mutate(Reset_Perct_Rush = ifelse(is.na(Reset_Perct_Rush), 0, Reset_Perct_Rush),
+         Half_Perct_Rush = ifelse(is.na(Half_Perct_Rush), 0, Half_Perct_Rush))
 # write_csv(first_and_tens, "expected_points/raw_fdowns_nscore_half_and_reset.csv")
+
+# Drive Number and Half Number Varible Functions
 
 test_extract_row <- function(pid_of_int, plays_df = PLAYS_DF){
   plays_df %>% filter(pid == pid_of_int) %>%

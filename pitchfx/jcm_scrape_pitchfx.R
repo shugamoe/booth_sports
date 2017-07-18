@@ -28,8 +28,9 @@ YEAR_DF <- tibble(start = OFFSET %>%
                           map(~src_sqlite(., create = T)))
 
 scrape_to_local <- function(db, start, end, func, write){
+  END <- end
   if (func == "update"){
-    update_db(db$con)    
+    update_db(db$con, end = END)    
   } else if (func == "create"){
     scrape(start, end, connect = db$con)
   }
@@ -40,6 +41,9 @@ scrape_to_local <- function(db, start, end, func, write){
 }
 
 export_csv <- function(db){
+  print("Exporting")
+  file_name <- str_replace(db$con@dbname, "sqlite", "csv")
+  print(file_name)
   t <- inner_join(tbl(db, "pitch"), tbl(db, "atbat"), by = 
                     c("num", "gameday_link")) %>%
     dplyr::select(-contains(".y")) %>%
@@ -48,13 +52,12 @@ export_csv <- function(db){
     filter(!str_detect(gameday_link, "aasmlb|nasmlb"))
   print(unique(t$season))
   names(t) <- str_replace(names(t), ".x", "")
-  file_name <- str_replace(db$con@dbname, "sqlite", "csv")
-  write_csv(t, file_name)
+  write_tsv(t, file_name)
 }
 
 main <- function(create_or_update){
-  as.list(YEAR_DF) %>%
+  as.list(YEAR_DF[-1, ]) %>%
     pwalk(.f = scrape_to_local, func = create_or_update, write = TRUE)
 }
 
-main("update")
+main("fucking nothing")

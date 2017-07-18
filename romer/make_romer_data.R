@@ -51,19 +51,27 @@ KICK_SIT_KEY <- rbind(
 calc_xi <- function(i, df){
   cur_situation <- sym(glue("situation_{i}"))
   cur_situation <- enquo(cur_situation)
-  print(cur_situation)
   
   lead_situation <- sym(glue("situation_{i}_lead"))
   lead_situation <- enquo(lead_situation)
-  print(lead_situation)
   
   xi_nm <- glue("X{i}")
-  
   xi_formula <- quo_expr(quo(UQ(cur_situation) - has_next_pos * UQ(lead_situation)))
-  browser()
-  t <- df %>%
-    mutate(!!xi_nm := UQ(xi_formula))
-  browser()
+  df %>%
+    transmute(!!xi_nm := UQ(xi_formula))
+}
+
+estimate_xi <- function(i, df){
+  dep_var <- glue("X{i}")
+  indep_var <- glue("situation_{i}")
+  
+  lm_formula <- as.formula(glue("{dep_var} ~ {indep_var}"))
+  est_model <- lm(lm_formula, data = df)
+  
+  est_var <- glue("X{i}_est")
+  
+  df %>%
+    transmute(!!est_var := predict(est_model, .))
 }
 
 make_romer_data <- function(plays_df = PLAYS_DF, write){
@@ -116,6 +124,18 @@ make_romer_data <- function(plays_df = PLAYS_DF, write){
            Playoff = ifelse(wk >= 17, 1, 0)
            )
   
+  # Calculate xi 
+  romer_df <- as.list(1:104) %>% 
+    map(~calc_xi(., df = romer_df)) %>%
+    reduce(bind_cols) %>%
+    bind_cols(romer_df, .)
+    
+  # Estimate xi
+  romer_df <- as.list(1:104) %>%
+    map(~estimate_xi(., df = romer_df)) %>%
+    reduce(bind_cols) %>%
+    bind_cols(romer_df, .)
+  
   if (write){
     write_csv(romer_df, "romer/romer_data.csv")
   } else {
@@ -123,6 +143,7 @@ make_romer_data <- function(plays_df = PLAYS_DF, write){
   }
 }
 
+make_romer_data(write = T)
 
 ### Leftover from make_exp_score.R
 # calc_min_in_half <- function(play_row){
