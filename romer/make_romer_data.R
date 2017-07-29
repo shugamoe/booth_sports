@@ -131,10 +131,10 @@ make_romer_data <- function(plays_df = PLAYS_DF, write){
     bind_cols(romer_df, .)
     
   # Estimate xi
-  romer_df <- as.list(1:104) %>%
-    map(~estimate_xi(., df = romer_df)) %>%
-    reduce(bind_cols) %>%
-    bind_cols(romer_df, .)
+  # romer_df <- as.list(1:104) %>%
+  #   map(~estimate_xi(., df = romer_df)) %>%
+  #   reduce(bind_cols) %>%
+  #   bind_cols(romer_df, .)
   
   if (write){
     write_csv(romer_df, "romer/romer_data.csv")

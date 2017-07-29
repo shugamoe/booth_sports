@@ -1,0 +1,86 @@
+---
+title: "Net Score to Half | Precision: Standard Errors with Clustering"
+author: "Julian McClellan"
+date: "July 16, 2017"
+output: 
+  pdf_document:
+    toc: true
+---
+
+```{r setup, include=FALSE, message=FALSE, warning=FALSE}
+library(tidyverse)
+library(ggplot2)
+library(multiwayvcov)
+
+knitr::opts_chunk$set(message = FALSE, echo = FALSE)
+
+theme_set(theme_minimal())
+
+EXP_DAT <- read_csv("raw_fdowns_nscore_half_and_reset.csv")
+
+filter_season <- function(data, seasons){
+  data %>%
+    filter(Season %in% seasons)
+}
+
+EXP_SPLIT <- list(all = EXP_DAT,
+                  `2000-2010` = filter_season(EXP_DAT, 2000:2010),
+                  `2011-2015` = filter_season(EXP_DAT, 2011:2015),
+                  `2016` = filter_season(EXP_DAT, 2016)
+)
+
+cl   <- function(dat,fm, cluster){
+           require(sandwich, quietly = TRUE)
+           require(lmtest, quietly = TRUE)
+           M <- length(unique(cluster))
+           N <- length(cluster)
+           K <- fm$rank
+           dfc <- (M/(M-1))*((N-1)/(N-K))
+           uj  <- apply(estfun(fm),2, function(x) tapply(x, cluster, sum));
+           vcovCL <- dfc*sandwich(fm, meat=crossprod(uj)/N)
+           coeftest(fm, vcovCL)
+}
+```
+
+
+```{r}
+calc_precision <- function(data, cluster_var = character(0), method = "cl"){
+  model <- lm(Net_Score_to_Half ~ factor(Yfog) - 1, data = data)
+  
+  if (length(cluster_var) > 0){
+    if (method == "cl"){
+      se <- cl(data, model, data[[cluster_var]])[, 2]
+    } else {
+      se <- sqrt(diag(cluster.vcov(model, data[[cluster_var]])))  
+    }
+  } else {
+    se <- summary(model)$coefficients[, 2]
+    cluster_var <- "None"
+  }
+  
+  tibble(Year = rep(sprintf("%d-%d", min(data$Season), max(data$Season)), 99),
+         Yfog = 1:99,
+         Cluster_var = rep(cluster_var, 99),
+         SE = se)
+}
+
+precision_comp <- bind_rows(
+  EXP_SPLIT %>%
+    map_df(~ calc_precision(.)),
+  EXP_SPLIT %>%
+    map_df(~ calc_precision(., "Half_num")),
+  EXP_SPLIT %>%
+    map_df(~ calc_precision(., "Drive_num")),
+  EXP_SPLIT %>%
+    map_df(~ calc_precision(., "Armchair_gid"))
+)
+
+write_csv(precision_comp, "precision_comp.csv")
+```
+
+```{r}
+(se_plot <- precision_comp %>%
+  ggplot(aes(Yfog, SE, color = Cluster_var)) +
+    geom_point(size = .1) +
+    facet_wrap(~ Year))
+```

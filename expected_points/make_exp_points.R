@@ -19,19 +19,6 @@ calc_min_in_half <- function(play_row){
   }
 }
 
-# Calculates the length of the play in minutes
-calc_play_length <- function(play_row, plays_df){
-  play_after <- plays_df %>%
-    filter(gid == play_row$gid,
-           pid == play_row$pid + 1)
-  
-  if (nrow(play_after) == 0){
-    play_row$min_in_half 
-  } else {
-    play_after$min_in_half - play_row$min_in_half
-  }
-}
-
 calc_net_scores <- function(play_row, off_of_int){
   # browser()
   if (off_of_int == play_row$off){
@@ -55,15 +42,18 @@ create_drive_num_key_single <- function(fpid, fpid_lead, uid){
 GAMES_DF <- read_csv('nfl_00_16/GAME.csv') %>%
   dplyr::select(gid, h, seas, wk)
 PLAYS_DF <- read_csv('nfl_00_16/PLAY.csv') %>%
- mutate(min_in_half = ifelse(qtr %in% c(2, 4), min + sec / 60,
-                             ifelse(qtr %in% c(1,3),     # -100 shouldn't happen
-                                    15 + min + sec / 60, -100)),
+  mutate(min_in_half = ifelse(qtr %in% c(2, 4), min + sec / 60, # Not using overtime
+                             ifelse(qtr %in% c(1,3),     
+                                    15 + min + sec / 60, NA)),
         min_in_game = ifelse(qtr %in% c(3,4), min_in_half, 
-                             ifelse(qtr %in% c(1, 2), 30 + min_in_half, -1))) %>% # Not using overtime
- merge(GAMES_DF, ., by = 'gid')
+                             ifelse(qtr %in% c(1, 2), 30 + min_in_half, -1)),
+        gid_lead = lead(gid),
+        min_in_game_lead = lead(min_in_game),
+        type_lead = lead(type),
+        len_clock = ifelse(gid == gid_lead, (min_in_game - min_in_game_lead) * 60, 60 * min_in_game)) %>% 
+  merge(GAMES_DF, ., by = 'gid')
 
-# PLAYS_DF <- PLAYS_DF %>%
-#  by_row(calc_play_length, .collate = "cols", .to = "min_in_play", plays_df = PLAYS_DF)
+PLAY_TYPES <- unique(PLAYS_DF$type)
 
 PLAYS_DF$min_in_half <- as.numeric(PLAYS_DF$min_in_half)
 
@@ -81,6 +71,61 @@ GAME_TRACKER <- sort(unique(PLAYS_DF$gid)) %T>%
  print("Making Game Tracker", null = .) %>%
  map(~ extract_game_plays_df(plays_df = PLAYS_DF,  game_id = .))
 
+calc_play_type_info <- function(cur_off_to_half_df, reset_play){
+  half_info_df <- PLAY_TYPES %>%
+    map(~create_type_count(df = cur_off_to_half_df, desired_type = .,
+                           suffix = "half")) %>%
+    bind_cols()
+  
+  half_info_list <- as.list(colSums(half_info_df))
+  
+  cur_off_to_reset_df <- cur_off_to_half_df %>%
+    dplyr::filter(pid <= reset_play$pid)
+  reset_info_df <- PLAY_TYPES %>%
+    map(~create_type_count(df = cur_off_to_reset_df, desired_type = .,
+                           suffix = "reset")) %>%
+    bind_cols()
+  
+  reset_info_list <- as.list(colSums(reset_info_df))
+  
+  if (nrow(cur_off_to_reset_df) != 0){
+    last_off_play <- tail(cur_off_to_reset_df, 1)
+    # Catch conversions after a reset
+    if (last_off_play$type_lead == "CONV"){
+      reset_info_list$CONV_count_reset = reset_info_list$CONV_count_reset + 1
+      
+      conv_play <- cur_off_to_half_df %>%
+        dplyr::filter(pid == last_off_play$pid + 1,
+                      type == "CONV")
+      
+      # It's possible a conversion was from an interception
+      # returned for a TD
+      if (nrow(conv_play) != 0){
+        print(sprintf("Conversion caught (conv at %d)", last_off_play$pid + 1))
+        reset_info_list$CONV_len_reset = reset_info_list$CONV_len_reset + conv_play$len 
+        reset_info_list$CONV_len_clock_reset = reset_info_list$CONV_len_clock_reset + conv_play$len_clock 
+      }
+    }
+  }
+  
+  rvec <- c(unlist(reset_info_list), unlist(half_info_list))
+  if (length(rvec) != 48){
+    browser()
+  }
+  rvec 
+}
+
+create_type_count <- function(df, desired_type, suffix){
+  type_track <- sprintf("%s_count_%s", desired_type, suffix)
+  type_len <- sprintf("%s_len_%s", desired_type, suffix)
+  type_len_clock <- sprintf("%s_len_clock_%s", desired_type, suffix)
+  df %>%
+    transmute(!!type_track := ifelse(type == desired_type, 1, 0),
+           !!type_len := ifelse(type == desired_type, len, 0),
+           !!type_len_clock := ifelse(type == desired_type, 
+                                      len_clock, 0))
+}
+
 calc_net_score_info <- function(play_row, game_tracker){
   # Get the current play, and all future plays within the same game that are in
   # the same half of the game.
@@ -96,9 +141,7 @@ calc_net_score_info <- function(play_row, game_tracker){
   
   # Get the pass or rush plays from the current offense
   cur_off_to_half <- search_df %>%
-    filter(off == play_row$off) %>%
-    mutate(pass_or_rush = ifelse(type %in% c("PASS", "RUSH"), T, F),
-           rush = ifelse(type == "RUSH", T, F))
+    filter(off == play_row$off)
   
   # We don't count a safety as a reset, only FGs and TD's + extra point(s)
   fg_td_only <- search_df %>%
@@ -162,27 +205,22 @@ calc_net_score_info <- function(play_row, game_tracker){
     Reset_Team_to_Score <- 0
   }
   
-  cur_off_to_reset <- cur_off_to_half %>%
-    filter(pid <= reset_play$pid)
-  reset_avg_time_per_play <- sum(cur_off_to_reset$len) / nrow(cur_off_to_reset)
-  reset_perct_rush <- 100 * sum(cur_off_to_reset$rush) / sum(cur_off_to_reset$pass_or_rush)
-  
+  type_count_play_vec <- calc_play_type_info(cur_off_to_half,
+                                             reset_play)
   net_till_half_score <- sum(search_df$net_score)
-  half_avg_time_per_play <- sum(cur_off_to_half$len) / nrow(cur_off_to_half)
-  half_perct_rush <- 100 * sum(cur_off_to_half$rush) / sum(cur_off_to_half$pass_or_rush)
-  (net_score_info <- as.numeric(c(net_till_half_score,
+  
+  net_score_info <- as.numeric(c(net_till_half_score,
                                   net_till_reset_score, 
                                   reset_min_in_half, 
                                   time_to_reset, 
                                   Reset_Team_to_Score,
-                                  reset_avg_time_per_play,
-                                  reset_perct_rush,
-                                  half_avg_time_per_play,
-                                  half_perct_rush)))
+                                  type_count_play_vec))
 }
 
+
+
 calc_koff_info <- function(play_row, game_tracker, test = FALSE){
-  print(sprintf("Koff for pid: %d", play_row$pid))
+  # print(sprintf("Koff for pid: %d", play_row$pid))
   if (test){
     browser()
   }
@@ -351,19 +389,15 @@ make_raw_exp_scores_table <- function(test = FALSE, plays_df){
                   ptso, ptsd, off, def, yfog, dseq, type)
   
   first_and_tens <- first_and_tens %>%
-    by_row(calc_koff_info, game_tracker = GAME_TRACKER, .collate = "cols",
-           .to = "koff_info")
-  print("Koff info calculated")
+    by_row(calc_net_score_info, game_tracker = GAME_TRACKER, .collate = "cols",
+           .to = "ex_score_info")
   
   first_and_tens <- first_and_tens %>%
-    by_row(calc_net_score_info, game_tracker = GAME_TRACKER, .collate = "cols",
-           .to = "ex_score_info") %T>%
-    print("Net Score Info calculated, mutating follow_koff to 0, 1", null = .) %>%
-    mutate(koff_info1 = ifelse(koff_info1 == "True", 1, 0)) %T>%
-    print("Mutating drive start", null = .) %>%
-    dplyr::mutate(drive_start = ifelse(dseq == 1, 1, 0)) %T>%
-    print("Making net score numeric", null = .)
-  
+    by_row(calc_koff_info, game_tracker = GAME_TRACKER, .collate = "cols",
+           .to = "koff_info") %>%
+    mutate(koff_info1 = ifelse(koff_info1 == "True", 1, 0)) %>%
+    dplyr::mutate(drive_start = ifelse(dseq == 1, 1, 0)) %>%
+    
   print("make raw_exp_score table terminating")
   first_and_tens
 }
@@ -418,7 +452,7 @@ make_off_won_binary <- function(play_row, game_tracker = GAME_TRACKER){
   }
 }
 
-first_and_tens <- make_raw_exp_scores_table(test = TRUE, plays_df = PLAYS_DF) %>%
+first_and_tens <- make_raw_exp_scores_table(test = FALSE, plays_df = PLAYS_DF) %>%
   dplyr::mutate(reset_min_in_game = ifelse(qtr %in% c(1, 2), 30 + ex_score_info3,
                                     ifelse(qtr %in% c(3, 4), ex_score_info3,
                                            NA)),
@@ -426,18 +460,69 @@ first_and_tens <- make_raw_exp_scores_table(test = TRUE, plays_df = PLAYS_DF) %>
   print("Converting reset time", null = .) %>%
   by_row(convert_reset_time, .collate = "cols", .to = "reset_time_info") %T>%
   print("Making won playoff binary", null = .) %>%
-  by_row(make_off_won_binary, .collate = "cols", .to = "Offense_Won") %T>%
-  print("Renaming vars", null = .) %>%                            # Reset min in half
+  by_row(make_off_won_binary, .collate = "cols", .to = "Offense_Won")
+
+first_and_tens <- first_and_tens %>%
   rename(# Time variables
          Net_Score_to_Half = ex_score_info1,
          Net_Score_to_Reset = ex_score_info2,
          Min_Reset_to_Half = ex_score_info3,
          Time_to_Reset = ex_score_info4,
          Reset_Team_to_Score = ex_score_info5,
-         Reset_Avg_Time_per_Play = ex_score_info6,
-         Reset_Perct_Rush = ex_score_info7,
-         Half_Avg_Time_per_Play = ex_score_info8,
-         Half_Perct_Rush = ex_score_info9,
+         
+         # So many count, len, and len_clock,
+         # Should find better way to do this
+         # Could have used closures/quotes and what not, oh well
+         KOFF_reset_count = ex_score_info6,
+         KOFF_reset_len = ex_score_info7,
+         KOFF_reset_len_clock = ex_score_info8,
+         RUSH_reset_count = ex_score_info9,
+         RUSH_reset_len = ex_score_info10,
+         RUSH_reset_len_count = ex_score_info11,
+         PASS_reset_count = ex_score_info12,
+         PASS_reset_len = ex_score_info13,
+         PASS_reset_len_clock = ex_score_info14,
+         FGXP_reset_count = ex_score_info15,
+         FGXP_reset_len = ex_score_info16,
+         FGXP_reset_len_clock = ex_score_info17,
+         PUNT_reset_count = ex_score_info18,
+         PUNT_reset_len = ex_score_info19,
+         PUNT_reset_len_clock = ex_score_info20,
+         NOPL_reset_count = ex_score_info21,
+         NOPL_reset_len = ex_score_info22,
+         NOPL_reset_len_clock = ex_score_info23,
+         ONSD_reset_count = ex_score_info24,
+         ONSD_reset_len = ex_score_info25,
+         ONSD_reset_len_clock = ex_score_info26,
+         CONV_reset_count = ex_score_info27,
+         CONV_reset_len = ex_score_info28,
+         CONV_reset_len_clock = ex_score_info29,
+         
+         KOFF_half_count = ex_score_info30,
+         KOFF_half_len = ex_score_info31,
+         KOFF_half_len_clock = ex_score_info32,
+         RUSH_half_count = ex_score_info33,
+         RUSH_half_len = ex_score_info34,
+         RUSH_half_len_count = ex_score_info35,
+         PASS_half_count = ex_score_info36,
+         PASS_half_len = ex_score_info37,
+         PASS_half_len_clock = ex_score_info38,
+         FGXP_half_count = ex_score_info39,
+         FGXP_half_len = ex_score_info40,
+         FGXP_half_len_clock = ex_score_info41,
+         PUNT_half_count = ex_score_info42,
+         PUNT_half_len = ex_score_info43,
+         PUNT_half_len_clock = ex_score_info44,
+         NOPL_half_count = ex_score_info45,
+         NOPL_half_len = ex_score_info46,
+         NOPL_half_len_clock = ex_score_info47,
+         ONSD_half_count = ex_score_info48,
+         ONSD_half_len = ex_score_info49,
+         ONSD_half_len_clock = ex_score_info50,
+         CONV_half_count = ex_score_info51,
+         CONV_half_len = ex_score_info52,
+         CONV_half_len_clock = ex_score_info53,
+         
          Reset_qtr = reset_time_info1,
          Reset_min = reset_time_info2,
          Reset_sec = reset_time_info3,
@@ -462,8 +547,13 @@ first_and_tens <- make_raw_exp_scores_table(test = TRUE, plays_df = PLAYS_DF) %>
          Min_Reset_to_GameEnd = reset_min_in_game,
          Follow_Kickoff = koff_info1,
          Kickoff_Type = koff_info2
-         ) %T>%
-  print("Selecting Vars", null = .) %>%
+         ) %>%
+  # Changes John wants
+  mutate(Follow_Kickoff = ifelse(Kickoff_Type == "S", 0, Follow_Kickoff),
+         Kickoff_Type = ifelse(is.na(Kickoff_Type), "None", Kickoff_Type)) %>%
+  merge(DRIVE_KEY, all.x = T) %>%
+  mutate(Half_num = ifelse(Qtr %in% c(1,2), (Armchair_gid - 1) * 2 + 1,
+                           Armchair_gid * 2)) %>%
   dplyr::select(
   Season,
   Week,
@@ -480,9 +570,6 @@ first_and_tens <- make_raw_exp_scores_table(test = TRUE, plays_df = PLAYS_DF) %>
   Off,
   Def,
   Home,
-  Yfog,
-  Armchair_dsq,
-  Drive_start,
   Net_Score_to_Half,
   Net_Score_to_Reset,
   Reset_Team_to_Score,
@@ -492,22 +579,70 @@ first_and_tens <- make_raw_exp_scores_table(test = TRUE, plays_df = PLAYS_DF) %>
   Time_to_Reset,
   Min_Reset_to_Half,
   Min_Reset_to_GameEnd,
-  Follow_Kickoff,
   Kickoff_Type,
   Offense_Won,
-  Reset_Avg_Time_per_Play,
-  Reset_Perct_Rush,
-  Half_Avg_Time_per_Play,
-  Half_Perct_Rush) %>%
-  # Changes John wants
-  mutate(Follow_Kickoff = ifelse(Kickoff_Type == "S", 0, Follow_Kickoff),
-         Kickoff_Type = ifelse(is.na(Kickoff_Type), "None", Kickoff_Type)) %>%
-  merge(DRIVE_KEY, all.x = T) %>%
-  mutate(Half_num = ifelse(Qtr %in% c(1,2), (Armchair_gid - 1) * 2 + 1,
-                           Armchair_gid * 2)) %>%
-  mutate(Reset_Perct_Rush = ifelse(is.na(Reset_Perct_Rush), 0, Reset_Perct_Rush),
-         Half_Perct_Rush = ifelse(is.na(Half_Perct_Rush), 0, Half_Perct_Rush))
-# write_csv(first_and_tens, "expected_points/raw_fdowns_nscore_half_and_reset.csv")
+  Half_num,
+  
+  # Don't apply to kickoff expected points so they're separate
+  Drive_start,
+  Armchair_dsq,
+  Drive_num,
+  Follow_Kickoff,
+  Yfog,
+  
+  KOFF_reset_count,
+  KOFF_reset_len,
+  KOFF_reset_len_clock,
+  RUSH_reset_count,
+  RUSH_reset_len,
+  RUSH_reset_len_count,
+  PASS_reset_count,
+  PASS_reset_len,
+  PASS_reset_len_clock,
+  FGXP_reset_count,
+  FGXP_reset_len,
+  FGXP_reset_len_clock,
+  PUNT_reset_count,
+  PUNT_reset_len,
+  PUNT_reset_len_clock,
+  NOPL_reset_count,
+  NOPL_reset_len,
+  NOPL_reset_len_clock,
+  ONSD_reset_count,
+  ONSD_reset_len,
+  ONSD_reset_len_clock,
+  CONV_reset_count,
+  CONV_reset_len,
+  CONV_reset_len_clock,
+ 
+  KOFF_half_count,
+  KOFF_half_len,
+  KOFF_half_len_clock,
+  RUSH_half_count,
+  RUSH_half_len,
+  RUSH_half_len_count,
+  PASS_half_count,
+  PASS_half_len,
+  PASS_half_len_clock,
+  FGXP_half_count,
+  FGXP_half_len,
+  FGXP_half_len_clock,
+  PUNT_half_count,
+  PUNT_half_len,
+  PUNT_half_len_clock,
+  NOPL_half_count,
+  NOPL_half_len,
+  NOPL_half_len_clock,
+  ONSD_half_count,
+  ONSD_half_len,
+  ONSD_half_len_clock,
+  CONV_half_count,
+  CONV_half_len,
+  CONV_half_len_clock
+  )
+  # mutate(Reset_Perct_Rush = ifelse(is.na(Reset_Perct_Rush), 0, Reset_Perct_Rush),
+  #        Half_Perct_Rush = ifelse(is.na(Half_Perct_Rush), 0, Half_Perct_Rush))
+write_csv(first_and_tens, "expected_points/raw_fdowns_nscore_half_and_reset.csv")
 
 # Drive Number and Half Number Varible Functions
 
@@ -517,7 +652,7 @@ test_extract_row <- function(pid_of_int, plays_df = PLAYS_DF){
 }
 
 test_show_context <- function(pid_of_int, plays_df = PLAYS_DF){
-  print(plays_df %>% filter(pid < pid_of_int + 15, pid > pid_of_int - 15) %>%
-          dplyr::select(type, dwn, ytg, qtr, pts, pid, gid))
-  print(pid_of_int)
+  df <- plays_df %>% filter(pid < pid_of_int + 15, pid > pid_of_int - 15) %>%
+          dplyr::select(type, dwn, ytg, qtr, pts, pid, gid, off)
+  list(df = df, pid = pid_of_int)
 }

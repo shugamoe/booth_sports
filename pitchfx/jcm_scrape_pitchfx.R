@@ -29,15 +29,37 @@ YEAR_DF <- tibble(start = OFFSET %>%
 
 scrape_to_local <- function(db, start, end, func, write){
   END <- end
+  start <- ymd(start)
   if (func == "update"){
     update_db(db$con, end = END)    
   } else if (func == "create"){
-    scrape(start, end, connect = db$con)
+    scrape_by_day(db, start, END, start + days(1))  
   }
   
   if (write){
    export_csv(db) 
   }
+}
+
+scrape_by_day <- function(db, start, final_end, end){
+  if (!exists("end")){
+    end <- start + days(1)
+  }
+  
+  if (end >= final_end){
+    return()
+  }
+  
+  print("Scraping:")
+  print(start)
+  print(end)
+  
+  try(
+  scrape(start = as.character(start),
+         end = as.character(end),
+         connect = db$con)
+  )
+  scrape_by_day(db, start + days(2), final_end, end + days(2))
 }
 
 export_csv <- function(db){
@@ -50,14 +72,18 @@ export_csv <- function(db){
     collect() %>%
     mutate(season = as.integer(str_extract(gameday_link, "[\\d]{4}"))) %>%
     filter(!str_detect(gameday_link, "aasmlb|nasmlb"))
+  if (any(is.na(t$pitcher_name))){
+    browser()
+  }
   print(unique(t$season))
-  names(t) <- str_replace(names(t), ".x", "")
-  write_tsv(t, file_name)
+  names(t) <- str_replace(names(t), "\\.x", "")
+  
+  write.csv(t, file_name)
 }
 
 main <- function(create_or_update){
-  as.list(YEAR_DF[-1, ]) %>%
+  as.list(YEAR_DF) %>%
     pwalk(.f = scrape_to_local, func = create_or_update, write = TRUE)
 }
 
-main("fucking nothing")
+main("create")

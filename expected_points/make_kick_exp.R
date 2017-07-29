@@ -1,0 +1,285 @@
+# R file to create model for expected number of points for next score
+library(purrrlyr)
+library(dplyr)
+library(readr)
+library(MASS)
+library(purrr)
+library(magrittr)
+
+calc_min_in_half <- function(play_row){
+  qtr <- play_row$qtr
+  min <- play_row$min
+  sec <- play_row$sec
+  if (qtr %in% c(2, 4)){
+    return(min + sec / 60)
+  } else if (qtr %in% c(1, 3)){
+    return(15 + min + sec / 60)
+  } else {
+    return(-1) # Not using overtime
+  }
+}
+
+calc_net_scores <- function(play_row, off_of_int){
+  # browser()
+  if (off_of_int == play_row$off){
+    return(play_row$pts)
+  } else if (off_of_int == play_row$def){
+    return(- play_row$pts)
+  } else {
+    if (play_row$pts != 0){
+      print('welp...')
+    }
+    # browser()
+    return(play_row$pts)
+  }
+}
+
+create_drive_num_key_single <- function(fpid, fpid_lead, uid){
+  tibble(Drive_num = rep(uid, fpid_lead - fpid),
+         pid = fpid:(fpid_lead - 1))
+}
+
+
+GAMES_DF <- read_csv('nfl_00_16/GAME.csv') %>%
+  dplyr::select(gid, h, seas, wk, ptsh, ptsv)
+PLAYS_DF <- read_csv('nfl_00_16/PLAY.csv') %>%
+  filter(qtr %in% c(1, 2, 3, 4)) %>%
+  mutate(min_in_half = ifelse(qtr %in% c(2, 4), min + sec / 60, # Not using overtime
+                             ifelse(qtr %in% c(1,3),     
+                                    15 + min + sec / 60, NA)),
+         min_in_game = ifelse(qtr %in% c(3,4), min_in_half, 
+                             ifelse(qtr %in% c(1, 2), 30 + min_in_half, -1)),
+         gid_lead = lead(gid),
+         min_in_game_lead = ifelse(gid == gid_lead, lead(min_in_game), 0),
+         len_clock = ifelse(gid == gid_lead, (min_in_game - min_in_game_lead) * 60, 60 * min_in_game),
+         
+         qtr_lead = lead(qtr),
+         
+         # Pts offense/defense at the end of the play
+         ptso_eop = ifelse(gid == gid_lead, lead(ptso), 
+                           ifelse(pts >= 0, ptso + pts, ptso)),
+         ptsd_eop = ifelse(gid == gid_lead, lead(ptsd), 
+                           ifelse(pts <= 0, ptsd - pts, ptsd)),
+         
+         # To track end of half plays
+         half = ifelse(qtr %in% c(1, 2), 1, 2),
+         half_lead = lead(half)
+  ) %>%
+  merge(GAMES_DF, ., by = 'gid')
+
+KOFFS_DF <- PLAYS_DF %>%
+  filter(type == "KOFF") %>%
+  mutate(half_lag_koff = lag(half))
+
+DRIVE_KEY <- read_csv("nfl_00_16/DRIVE.csv") %>%
+  mutate(fpid_lead = lead(fpid, default = max(PLAYS_DF$pid))) %>%
+  dplyr::select(fpid, fpid_lead, uid) %>%
+  pmap_df(create_drive_num_key_single)
+
+create_rplay_key_single <- function(pid,
+                                    pid_last_reset,
+                                    ptso_eop,
+                                    ptsd_eop,
+                                    off,
+                                    def,
+                                    pts,
+                                    qtr,
+                                    min,
+                                    sec, min_in_half,
+                                    min_in_game,
+                                    min_in_game_lead){
+  tibble(pid_reset = pid,
+         pid = (pid_last_reset + 1):pid,
+         ptso_eop_reset = ptso_eop,
+         ptsd_eop_reset = ptso_eop,
+         off_reset = off,
+         def_reset = def,
+         pts_reset = pts,
+         qtr_reset = qtr,
+         min_reset = min,
+         sec_reset = sec,
+         min_in_half_reset = min_in_half,
+         min_in_game_reset = min_in_game,
+         min_in_game_par = min_in_game_lead
+         ) 
+}
+  
+RPLAYS_KEY <- PLAYS_DF %>%
+  filter(pts %in% c(-8, -7, -6, -3, 3, 6, 7, 8) |
+           half != half_lead) %>%
+  mutate(pid_last_reset = lag(pid, default = 0)) %>%
+  dplyr::select(pid, pid_last_reset, ptso_eop, ptsd_eop, off, def, pts, qtr,
+                min, sec, min_in_half, min_in_game, min_in_game_lead) %>%
+  pmap_df(create_rplay_key_single)
+
+create_eohplay_key_single <- function(pid,
+                                    pid_last_eoh,
+                                    ptso_eop,
+                                    ptsd_eop){
+  tibble(pid = (pid_last_eoh + 1):pid,
+         ptso_eop_eoh = ptso_eop,
+         ptsd_eop_eoh = ptso_eop
+         ) 
+}
+
+EOHPLAYS_KEY <- PLAYS_DF %>%
+  filter(half != half_lead) %>%
+  mutate(pid_last_eoh = lag(pid, default = 95)) %>%
+  dplyr::select(pid, pid_last_eoh, ptso_eop, ptsd_eop) %>%
+  pmap_df(create_eohplay_key_single)
+
+
+# Determine Kickoff Type
+
+# There are often 1 or more plays ahead of a TD, CONV, FGXP, or S
+# before a FG.
+#
+# This function looks ahead of those plays and catches to catch
+# the corresponding kickoff
+catch_plays_ahead <- function(event_df, koff_type, merge_df, lahead = 4){
+  if (koff_type != "S"){
+    event_df %>%
+      merge(PLAYS_DF %>% dplyr::select(pid, qtr)) %>%
+      filter(qtr %in% c(1, 2, 3, 4)) %>%
+      transmute(pid = pid + lahead,
+                kickoff_type = koff_type) %>%
+      merge(merge_df)
+  } else if (koff_type == "S"){
+    event_df %>%
+      merge(PLAYS_DF %>% dplyr::select(pid, qtr)) %>%
+      filter(qtr %in% c(1, 2, 3, 4)) %>%
+      transmute(pid = pid + lahead,
+                kickoff_type = koff_type) %>%
+      merge(merge_df) %>%
+      bind_rows(PLAYS_DF %>% 
+                  filter(qtr %in% c(1, 2, 3, 4) & 
+                                    abs(pts) == 2) %>%
+                  transmute(pid = pid + lahead,
+                    kickoff_type = "S")) %>%
+      distinct()
+  }
+}
+
+create_koff_key <- function(merge_df = KOFFS_DF %>% 
+                              dplyr::select(pid), lahead = 1,
+                            koff_type_key = NULL){
+  print(sprintf("Looking ahead by %d", lahead))
+  XP <- read_csv("nfl_00_16/FGXP.csv") %>%
+    filter(fgxp == "XP") %>%
+    catch_plays_ahead("TD", merge_df = merge_df, lahead = lahead)
+  
+  TD <- read_csv("nfl_00_16/TD.csv") %>%
+   catch_plays_ahead("TD", merge_df = merge_df, lahead = lahead)
+  
+  
+  CONV <- read_csv("nfl_00_16/CONV.csv") %>%
+    catch_plays_ahead("TD", merge_df = merge_df, lahead = lahead)
+  
+  TD <- bind_rows(XP, TD, CONV) %>% 
+    distinct()
+  
+  FG <- read_csv("nfl_00_16/FGXP.csv") %>%
+    filter(fgxp == "FG") %>%
+    catch_plays_ahead("FG", merge_df = merge_df, lahead = lahead)
+  
+    
+  SAFETY <- read_csv("nfl_00_16/SAFETY.csv") %>%
+    catch_plays_ahead("S", merge_df = merge_df, lahead = lahead)
+    # SAFETY.csv is missing fumbles returned for safeties.
+  
+  HALF <- KOFFS_DF %>%
+    dplyr::select(pid, half, half_lag_koff) %>%
+    filter(half != half_lag_koff | 
+             pid == min(KOFFS_DF$pid)) %>%
+    transmute(pid = pid,
+              kickoff_type = ifelse(is.na(half_lag_koff), "1STHF",
+                                          ifelse(half > half_lag_koff, 
+                                    ifelse(half == 2, "2NDHF", 
+                                           ifelse(half < half_lag_koff, 
+                                                  ifelse(half == 1, "1STHF",
+                                                         NA), "1STHF")), "1STHF"))
+                
+    ) %>%
+    merge(merge_df)
+  
+  KOFF_TYPE_KEY <- bind_rows(FG, SAFETY, HALF, TD)
+  
+  KOFF_CONFLICT <- KOFF_TYPE_KEY %>%
+    group_by(pid) %>%
+    filter(n() > 1) %>%
+    filter(!(kickoff_type %in% c("1STHF", "2NDHF")))
+  
+  KOFF_TYPE_KEY <- KOFF_TYPE_KEY %>%
+    filter(!((pid %in% KOFF_CONFLICT$pid) &
+             !(kickoff_type %in% c("1STHF", "2NDHF"))))
+  
+  if (is.null(koff_type_key)){
+    missing <- setdiff(merge_df$pid, KOFF_TYPE_KEY$pid)
+  } else {
+    new_key <- bind_rows(KOFF_TYPE_KEY, koff_type_key)
+    missing <- setdiff(merge_df$pid, new_key$pid)
+  }
+  
+  
+  print(length(missing))
+  if (length(missing) == 0){
+    bind_rows(koff_type_key, KOFF_TYPE_KEY)
+  } else {
+    if (is.null(koff_type_key)){
+      create_koff_key(tibble(pid = missing), lahead = lahead + 1, koff_type_key = KOFF_TYPE_KEY)
+    } else {
+      if (lahead == 4){
+        browser()
+      } 
+      create_koff_key(tibble(pid = missing), lahead = lahead + 1, 
+                      koff_type_key = new_key)
+    }
+  }
+}
+
+KOFF_TYPE_KEY <- create_koff_key()
+
+KOFFS_DF <- list(KOFF_TYPE_KEY,
+                 DRIVE_KEY,
+                 RPLAYS_KEY,
+                 EOHPLAYS_KEY
+                 ) %>%
+  reduce(~merge(KOFFS_DF, ., all.x = T)) %>%
+  transmute(
+    Season = seas,
+    Week = wk,
+    Playoff = ifelse(Week >= 17, 1, 0),
+    Armchair_gid = gid,
+    Armchair_pid = pid,
+    Qtr = qtr,
+    Min = min,
+    Sec = sec,
+    Min_left_in_half = min_in_half,
+    Min_left_in_game = min_left_in_game,
+    Pts_Off = ptso,
+    Pts_Def = ptsd,
+    Off = off,
+    Def = def,
+    Home = home,
+    Net_Score_to_Half = ifelse(off == off_eoh, 
+                                      (ptso_eoh - ptso) - (ptsd_eoh - ptsd)
+                                      (ptsd_eoh - ptso) - (ptso_eoh - ptsd)),
+    Net_Score_to_Reset = ifelse(off == off_reset, 
+                                      (ptso_reset - ptso) - (ptsd_reset - ptsd)
+                                      (ptsd_reset - ptso) - (ptso_reset - ptsd)),
+    Reset_Team_to_Score = ifelse(pts_reset > 0, 1, 
+                                 ifelse(pts_reset == 0, 0, -1)),
+    Reset_qtr = qtr_reset,
+    Reset_min = min_reset,
+    Reset_sec = sec_reset,
+    Time_to_reset = min_in_game - min_in_game_lead,
+    Min_Reset_to_Half = min_in_half_reset,
+    Min_Reset_to_GameEnd = min_in_game,
+    Kickoff_Type = kickoff_type,Kickoff_Type,
+    Offense_Won = ifelse(off == Home, ifelse(ptsh > ptsv, 1, 0),
+                         ifelse(ptsv > ptsh, 0, 0)),
+    Half_num = ifelse(Qtr %in% c(1,2), (Armchair_gid - 1) * 2 + 1,
+                           Armchair_gid * 2)
+  )
+
+
