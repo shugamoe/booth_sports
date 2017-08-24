@@ -14,11 +14,11 @@ library(reshape2)
 library(latex2exp)
 library(magrittr)
 
-knitr::opts_chunk$set(message = FALSE, echo = FALSE)
+knitr::opts_chunk$set(message = FALSE, echo = FALSE, warning = F)
 
 theme_set(theme_minimal())
 
-EXP_DAT <- read_csv("raw_fdowns_nscore_half_and_reset.csv")
+EXP_DAT <- read.csv("correc_raw_fdowns_nscore_half_and_reset.csv")
 KOFF <- EXP_DAT %>%
   filter(Follow_Kickoff == 1)
 ```
@@ -114,10 +114,11 @@ combine_yfog_stats <- function(..., col_name, melt = TRUE){
     }
   }
   if (melt){
+    yds <- base_df$Yfog
     base_df %>%
       select(-Yfog) %>%
       melt(value.name = col_name) %>%
-      mutate(Yfog = rep(1:99, length(data_frames)))
+      mutate(Yfog = rep(yds, length(data_frames)))
   } else {
    base_df 
   }
@@ -195,7 +196,9 @@ ggplot(score_prob, aes(Yfog, score_prob, color = variable)) +
 
 ```{r}
 ### All First and 10/Goal
-enp_cond_all <- combine_yfog_stats(enp_o_oscore_yd, enp_o_dscore_yd, enp_o_noscore_yd, 
+enp_cond_all <- combine_yfog_stats(as.data.frame(enp_o_oscore_yd), 
+                                   as.data.frame(enp_o_dscore_yd),
+                                   as.data.frame(enp_o_noscore_yd), 
                                    col_name = "enp_cond")
 
 ggplot(enp_cond_all, aes(Yfog, enp_cond, color = variable)) + 

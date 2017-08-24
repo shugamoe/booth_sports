@@ -1,0 +1,42 @@
+---
+title: "Method and Approach Comparison"
+author: "Julian McClellan"
+date: "August 11th Data Used"
+output: pdf_document
+---
+
+```{r setup, include=T, echo=F, message=F, warning=F}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(stringr)
+library(ggplot2)
+theme_set(theme_minimal())
+
+comp_data <- list(enp_fm1 = read.csv("../method_1/enp_fm1.csv"),
+     enp_rm1 = read.csv("../method_1/enp_rm1.csv"),
+     enp_fm2 = read.csv("../method_2/enp_fm2.csv")
+       ) %>%
+  reduce(merge) %>%
+  gather(descrip, enp, -Yfog) %>%
+  mutate(approach = ifelse(grepl("rm", descrip), "Regression", "Formula"),
+         method = str_extract(descrip, "m[123]"),
+         method = str_replace(method, "m", "Method "),
+         app_meth = paste(method, approach, sep = " | "),
+         year_range = str_replace(str_match(descrip, "[\\d]{4}\\.[\\d]{4}$"), "\\.", " - "),
+         year_range = ifelse(year_range == "2016 - 2016", str_replace(year_range, "2016 - ", ""),
+                             year_range)
+         )
+comp_data <- within(comp_data, year_range <- 
+                           factor(year_range, levels = c("2000 - 2016", "2000 - 2010",
+                                                   "2011 - 2015", "2016")))
+
+comp_data %>%
+  ggplot(aes(Yfog, enp, color = app_meth)) + 
+    geom_line(size = .5) +
+    facet_wrap(~ year_range) + 
+    labs(color = "Method | Approach",
+         title = "",
+         y = "Expected Net Points Until Half",
+         x = "Yards From Own Goal")
+    
+```

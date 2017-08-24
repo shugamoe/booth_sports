@@ -3,6 +3,6 @@
 .RData
 .Ruserdata
 booth_sports.Rproj
-
+*.pdf
 *.sqlite
 *.csv

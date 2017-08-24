@@ -1,0 +1,69 @@
+---
+title: "Method 1 | Regression Approach"
+author: "Julian McClellan"
+date: "August 11th Data"
+output: pdf_document
+---
+
+```{r setup, include=T, message=F, warning=F, echo=F}
+source("../utility_funcs.R")
+library(tidyverse)
+library(ggplot2)
+theme_set(theme_minimal())
+
+knitr::opts_chunk$set(echo = F, warning = F, message = F)
+
+plot_dat <- make_plot_dat(EXP_DAT, 1, "r")
+csv_dat <- make_csv_dat(EXP_DAT, 1, "r")
+
+facet_names <- c("", "", "", "")
+names(facet_names) <- unique(plot_dat$split)
+
+(
+  ggplot(plot_dat) +
+  geom_line(aes(x = Yfog, y = enp_rm1, color = split)) +
+  labs(x = "Yards from Own Goal",
+       y = "Expected Net Points Until Half",
+       title = "Expected Net Points Until Half",
+       subtitle = "Regression Approach | Method 1",
+       color = "Season Split") +
+  scale_color_manual(labels = c("2000 - 2016", "2000 - 2010",
+                                "2011 - 2015", "2016"),
+                     values = c("red", "black", "blue", "green")) # +
+  # facet_wrap(~ split, labeller = as_labeller(facet_names))
+  )
+```
+
+
+```{r}
+EXP_SPLIT <- season_splits(EXP_DAT)
+
+precision_comp <- bind_rows(
+  EXP_SPLIT %>%
+    map_df(~ calc_precision(.)),
+  EXP_SPLIT %>%
+    map_df(~ calc_precision(., "Half_num")),
+  EXP_SPLIT %>%
+    map_df(~ calc_precision(., "Drive_num")),
+  EXP_SPLIT %>%
+    map_df(~ calc_precision(., "Armchair_gid"))
+)
+
+precision_comp_csv <- precision_comp %>%
+    transmute(split_and_cluster = glue("{Year}_{Cluster_var}"), 
+              Yfog = Yfog,
+              SE = SE) %>%
+spread(split_and_cluster, SE)
+
+write_csv(precision_comp_csv, "enp_rm1_se.csv")
+precision_comp <- within(precision_comp, Year <- 
+                           factor(Year, levels = c("2000 - 2016", "2000 - 2010",
+                                                   "2011 - 2015", "2016")))
+
+(se_plot <- precision_comp %>%
+  ggplot(aes(Yfog, SE, color = Cluster_var)) +
+    geom_point(size = .1) +
+    labs(title = "Clustered Standard Error Comparison",
+         subtitle = "Different Seasons") + 
+    facet_wrap(~ Year))
+```
