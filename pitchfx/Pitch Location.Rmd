@@ -1,0 +1,121 @@
+---
+title: "Pitch Location"
+author: "Brad Woodfield"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+require(multiwayvcov)
+require(psych)
+require(lattice)
+require(knitr)
+require(broom)
+require(ggplot2)
+require(data.table)
+require(sandwich)
+require(lmtest)
+require(scatterplot3d)
+require(rgl)
+require(Rcmdr)
+require(dplyr)
+memory.limit(size = 10000000)
+setwd("C:/Users/bradl/Documents/R/PitchFX")
+df <- read.csv("PitchFX_2016.csv")
+```
+
+```{r, include=FALSE}
+df2 <- subset(df, df$Include == 1)
+rm(df)
+df2_NoSAC <- subset(df2, df2$SAC_AB == 0)
+rm(df2)
+df2_PA <- subset(df2_NoSAC, df2_NoSAC$Fringe_AB == 0)
+rm(df2_NoSAC)
+attach(df2_PA)
+
+#calculate distance from center of strike zone (0,2.5)
+df2_PA <- mutate(df2_PA,
+                x_side = df2_PA$px^2,
+                z_side = (df2_PA$pz - 2.5)^2,
+                dist_from_center = (x_side+z_side)^.5
+                 )
+#look up pitch types
+distinct(df2_PA, pitch_type)
+#remove intentional walks, pitchouts
+df2_PA <- filter(df2_PA, 
+ !pitch_type %in% 
+   c('IN','UN','PO','FO'))
+
+attach(df2_PA)
+```
+#Distance From Center of Strike Zone by Count
+##Excludes Pitchouts and Intentional Walks
+```{r}
+lmreg <- lm(dist_from_center ~ count + FIP + Leverage + p_throws*stand + batter_name - p_throws - stand -1, data = df2_PA)
+```
+```{r, echo=FALSE}
+m1.vcovCL.2 <- vcov(lmreg)
+
+setwd("C:/Users/bradl/OneDrive/Documents/Booth/First Year/Spring/BUS 33222 Sports Analytics/Project/Wald Testing/Pitch Location")
+write.csv(file="dist_from_center.csv", m1.vcovCL.2)
+
+fball <- tidy(lmreg)
+kable(fball[c(1:14,438:440),], digits = 3, caption = "Distance From Center")
+rm(lmreg)
+```
+
+\newpage
+#Effect of Distance From Center on Slugging Pct + Walks
+```{r}
+lmreg2 <- lm(Total_Bases_BB_AB ~ dist_from_center*count +FIP+Leverage + p_throws*stand +batter_name
+             - p_throws - stand - dist_from_center -1, data = df2_PA )
+```
+```{r, echo=FALSE}
+m1.vcovCL.2 <- cluster.vcov(lmreg2, df2_PA$AB_ID)
+
+setwd("C:/Users/bradl/OneDrive/Documents/Booth/First Year/Spring/BUS 33222 Sports Analytics/Project/Wald Testing/Pitch Location")
+write.csv(file="Total_Bases_BB_AB.csv", m1.vcovCL.2)
+
+kable(tidy(coeftest(lmreg2, m1.vcovCL.2))[c(438:449,1:14,450:452),],digits = 3, caption = "SLGBB")
+
+
+rm(lmreg2)
+```
+
+\newpage
+#Effect of Distance From Center on Slugging Pct 
+```{r}
+lmreg2 <- lm(Total_Bases_AB ~ dist_from_center*count +FIP+Leverage + p_throws*stand +batter_name
+             - p_throws - stand - dist_from_center -1, data = df2_PA )
+```
+```{r, echo=FALSE}
+m1.vcovCL.2 <- cluster.vcov(lmreg2, df2_PA$AB_ID)
+
+setwd("C:/Users/bradl/OneDrive/Documents/Booth/First Year/Spring/BUS 33222 Sports Analytics/Project/Wald Testing/Pitch Location")
+write.csv(file="Total_Bases_AB.csv", m1.vcovCL.2)
+
+kable(tidy(coeftest(lmreg2, m1.vcovCL.2))[c(438:449,1:14,450:452),],digits = 3, caption = "SLG Pct")
+
+rm(lmreg2)
+```
+
+\newpage
+#Effect of Distance From Center on Walk Pct 
+```{r}
+lmreg2 <- lm(BB_AB ~ dist_from_center*count +FIP+Leverage + p_throws*stand +batter_name
+             - p_throws - stand - dist_from_center -1, data = df2_PA )
+```
+```{r, echo=FALSE}
+m1.vcovCL.2 <- cluster.vcov(lmreg2, df2_PA$AB_ID)
+
+setwd("C:/Users/bradl/OneDrive/Documents/Booth/First Year/Spring/BUS 33222 Sports Analytics/Project/Wald Testing/Pitch Location")
+write.csv(file="BB_AB.csv", m1.vcovCL.2)
+
+
+kable(tidy(coeftest(lmreg2, m1.vcovCL.2))[c(438:449,1:14,450:452),],digits = 3, caption = "BB Pct")
+
+rm(lmreg2)
+```
+
+
+

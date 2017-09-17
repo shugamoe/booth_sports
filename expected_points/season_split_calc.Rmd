@@ -14,7 +14,7 @@ knitr::opts_chunk$set(message = FALSE, echo = FALSE)
 
 theme_set(theme_minimal())
 
-EXP_DAT <- read_csv("raw_fdowns_nscore_half_and_reset.csv")
+EXP_DAT <- read_csv("correc_raw_fdowns_nscore_half_and_reset.csv")
 KOFF <- EXP_DAT %>%
   filter(Follow_Kickoff == 1)
 ```

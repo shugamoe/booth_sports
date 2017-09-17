@@ -2,23 +2,24 @@
 title: "Method 2 | Formula Approach"
 author: "Julian McClellan"
 date: "August 11th Data Used"
-output: pdf_document
+output: 
+  pdf_document:
+    toc: true
 ---
 
 
 # Expected Net Points
 
-```{r setup, include=T, message = F, warning = F, echo = F}
+```{r setup, include=T, message = F, warning = F, echo = F, fig.width=7.5, fig.height=10}
 knitr::opts_chunk$set(echo = F, message = F, warning = F)
 source("../utility_funcs.R")
 source("form_m2_funcs.R")
 theme_set(theme_minimal())
 
-plot_dat <- make_plot_dat(EXP_DAT, 2, "f")
-csv_dat <- make_csv_dat(EXP_DAT, 2, "f")
+plot_dat <- make_plot_dat(EXP_DAT_WKO, 2, "f") %>%
+  mutate(full_or_not = ifelse(grepl("2000-2016", split), "", " "))
+csv_dat <- make_csv_dat(EXP_DAT_WKO, 2, "f")
 
-facet_names <- c("", "", "", "")
-names(facet_names) <- unique(plot_dat$split)
 
 (
   ggplot(plot_dat) +
@@ -30,18 +31,18 @@ names(facet_names) <- unique(plot_dat$split)
        color = "Season Split") +
   scale_color_manual(labels = c("2000 - 2016", "2000 - 2010",
                                 "2011 - 2015", "2016"),
-                     values = c("red", "black", "blue", "green")) #+
-  # facet_wrap(~ split, labeller = as_labeller(facet_names))
+                     values = c("red", "black", "blue", "green")) +
+  facet_grid(full_or_not ~ .)
   )
-
 ```
 
 # Components
 
-```{r components}
-components_plot_dat <- make_plot_dat(EXP_DAT, 2, "f", components = T) %>%
-  mutate(split = as.character(split))
-components_csv_dat <- make_csv_dat(EXP_DAT, 2, "f", components = T)
+```{r components, fig.width=7.5, fig.height=10}
+components_plot_dat <- make_plot_dat(EXP_DAT_WKO, 2, "f", components = T) %>%
+  mutate(split = as.character(split),
+         full_or_not = ifelse(grepl("2000-2016", split), "", " "))
+components_csv_dat <- make_csv_dat(EXP_DAT_WKO, 2, "f", components = T)
 
 enp_dscore <- components_plot_dat %>%
   filter(grepl("comp_enp_o_dscore", split))
@@ -74,10 +75,12 @@ labs(x = "Yards from Own Goal",
      color = "Season Split") +
 scale_color_manual(labels = c("2000 - 2016", "2000 - 2010",
                               "2011 - 2015", "2016"),
-                   values = c("red", "black", "blue", "green")) # +
-# facet_wrap(~ split, labeller = as_labeller(facet_names))
+                   values = c("red", "black", "blue", "green")) + 
+facet_grid(full_or_not ~ .)
+```
 
 
+```{r, fig.width=7.5, fig.height=10}
 # Enp with defense scoring
 facet_names <- c("", "", "", "")
 names(facet_names) <- unique(enp_dscore$split)
@@ -96,11 +99,13 @@ enp_dscore <- within(enp_dscore, split <-
        color = "Season Split") +
   scale_color_manual(labels = c("2000 - 2016", "2000 - 2010",
                                 "2011 - 2015", "2016"),
-                     values = c("red", "black", "blue", "green")) # +
-  # facet_wrap(~ split, labeller = as_labeller(facet_names))
+                     values = c("red", "black", "blue", "green")) +
+  facet_grid(full_or_not ~ .)
   )
 
+```
 
+```{r, fig.width=7.5, fig.height=10}
 # Enp with no one scoring
 facet_names <- c("", "", "", "")
 names(facet_names) <- unique(enp_noscore$split)
@@ -119,10 +124,12 @@ enp_noscore <- within(enp_noscore, split <-
        color = "Season Split") +
   scale_color_manual(labels = c("2000 - 2016", "2000 - 2010",
                                 "2011 - 2015", "2016"),
-                     values = c("red", "black", "blue", "green")) # +
-  # facet_wrap(~ split, labeller = as_labeller(facet_names))
+                     values = c("red", "black", "blue", "green")) + 
+  facet_grid(full_or_not ~ .)
   ) 
+```
 
+```{r, fig.width=7.5, fig.height=10}
 ############################# 
 ######### Probability #######
 #############################
@@ -140,15 +147,19 @@ p_o <- within(p_o, split <-
   geom_line(aes(x = Yfog, y = comp_fm2, color = split)) +
   labs(x = "Yards from Own Goal",
        y = "Probability",
-       title = "Prob of Offense Scroing TD/FG Before Half",
+       title = "Prob of Offense Scoring TD/FG Before Half",
        subtitle = "Formula Approach | Method 2",
        color = "Season Split") +
   scale_color_manual(labels = c("2000 - 2016", "2000 - 2010",
                                 "2011 - 2015", "2016"),
-                     values = c("red", "black", "blue", "green")) # +
-  # facet_wrap(~ split, labeller = as_labeller(facet_names))
-  ) 
+                     values = c("red", "black", "blue", "green")) + 
+  facet_grid(full_or_not ~ .) + 
+  coord_cartesian(ylim=c(0, 1))
+) 
 
+```
+
+```{r, fig.width=7.5, fig.height=10}
 # P of defense scoring
 facet_names <- c("", "", "", "")
 names(facet_names) <- unique(p_d$split)
@@ -162,16 +173,20 @@ p_d <- within(p_d, split <-
   geom_line(aes(x = Yfog, y = comp_fm2, color = split)) +
   labs(x = "Yards from Own Goal",
        y = "Probability",
-       title = "Prob of Defense Scroing TD/FG Before Half",
+       title = "Prob of Defense Scoring TD/FG Before Half",
        subtitle = "Formula Approach | Method 2",
        color = "Season Split") +
   scale_color_manual(labels = c("2000 - 2016", "2000 - 2010",
                                 "2011 - 2015", "2016"),
-                     values = c("red", "black", "blue", "green")) # +
-  # facet_wrap(~ split, labeller = as_labeller(facet_names))
+                     values = c("red", "black", "blue", "green")) +
+  facet_grid(full_or_not ~ .) + 
+  coord_cartesian(ylim=c(0, 1))
   ) 
 
 
+```
+
+```{r, fig.width=7.5, fig.height=10}
 # P of no one scoring
 facet_names <- c("", "", "", "")
 names(facet_names) <- unique(p_n$split)
@@ -184,22 +199,22 @@ p_n <- within(p_n, split <-
   geom_line(aes(x = Yfog, y = comp_fm2, color = split)) +
   labs(x = "Yards from Own Goal",
        y = "Probability",
-       title = "Prob of Defense Scroing TD/FG Before Half",
+       title = "Prob of No One Scoring TD/FG Before Half",
        subtitle = "Formula Approach | Method 2",
        color = "Season Split") +
   scale_color_manual(labels = c("2000 - 2016", "2000 - 2010",
                                 "2011 - 2015", "2016"),
-                     values = c("red", "black", "blue", "green")) # +
-  # facet_wrap(~ split, labeller = as_labeller(facet_names))
-
+                     values = c("red", "black", "blue", "green")) +
+  facet_grid(full_or_not ~ .) + 
+  coord_cartesian(ylim=c(0, 1))
 ```
 
 # Non-Yfog Components Table
 
 ```{r ko_table}
 library(knitr)
-KOFF <- EXP_DAT %>%
-  filter(Follow_Kickoff == 1)
+KOFF <- EXP_DAT_WKO %>%
+  filter(Yfog == 0)
 
 koff_sample <- list(`2000-2016` = KOFF,
                `2000-2010` = KOFF %>%
@@ -282,44 +297,43 @@ calc_nobs_ko <- function(data, to_score){
 }
 
 results <- tibble(sample = names(koff_sample),
+                  V_100_form = koff_sample %>% map(~calc_vok_rec(.)),
                   PROBO_KO = koff_sample %>% map(~calc_prob_ko(., "off", TRUE)),
                   PROBD_KO = koff_sample %>% map(~calc_prob_ko(., "def", TRUE)),
-                  PROBX_KO = koff_sample %>% map(~calc_prob_ko(., "none", TRUE)),
+                  PROBN_KO = koff_sample %>% map(~calc_prob_ko(., "none", TRUE)),
                   ENPO_KO = koff_sample %>% map(~calc_enp_ko(., "off")),
                   ENPD_KO = koff_sample %>% map(~calc_enp_ko(., "def")),
-                  ENPX_KO = koff_sample %>% map(~calc_enp_ko(., "none")),
-                  VOK_avg = koff_sample %>% map(~calc_vok_avg(.)),
-                  VOK_rec = koff_sample %>% map(~calc_vok_rec(.)),
+                  ENPN_KO = koff_sample %>% map(~calc_enp_ko(., "none")),
                   ExpNetPtsO_KO = koff_sample %>% map(~calc_enp_ko(., "off", to = "half")),
                   ExpNetPtsD_KO = koff_sample %>% map(~calc_enp_ko(., "def", to = "half")),
-                  ExpNetPtsX_KO = koff_sample %>% map(~calc_enp_ko(., "none", to = "half")),
-                  nobs_ko_chk = koff_sample %>% map(~calc_nobs_ko(., "all")),
+                  ExpNetPtsN_KO = koff_sample %>% map(~calc_enp_ko(., "none", to = "half")),
+                  nobs_ko_tot = koff_sample %>% map(~calc_nobs_ko(., "all")),
                   nobso_ko = koff_sample %>% map(~calc_nobs_ko(., "off")),
                   nobsd_ko = koff_sample %>% map(~calc_nobs_ko(., "def")),
-                  nobsx_ko = koff_sample %>% map(~calc_nobs_ko(., "none"))
+                  nobsn_ko = koff_sample %>% map(~calc_nobs_ko(., "none"))
                   )
 
 kable(results[,1:8])
-kable(results[,9:14])
-kable(results[,15:16])
+kable(results[,9:11])
+kable(results[,12:15])
 ```
 
 # Appendix: Variable Construction Formulas
 
+For $V_{100} ^ {form}$ all ExpPTS and Probs are conditional on a kickoff.
+
 $$
-V_{k} ^ {rec} (M\;2) = \frac{Prob(O\; |\;KO) * ExpPTS_O + Prob(D\;|\;KO) * (- ExpPTS_O) + 
-[1 - Prob(O\;|\;KO) - Prob(D\;|\;KO)] * ExpNetPTS}{1 + Prob(O\;|\;KO) - Prob(D\;|\;KO)}
+V_{100} ^ {form} = \frac{Prob(O) * ExpPTS_O + Prob(D) * (ExpPTS_D) + 
+[1 - Prob(O) - Prob(D)] * ExpPTS_N}{1 + Prob(O) - Prob(D)}
 $$
 
 $$
-V(yrdline=x) = Prob(O\;|\; yrdline = x) * [(ExpNetPTS_O\; | O\;Score, yrdline = x) - V_k] -
+V(yrdline=x) = Prob(O\;|\; yrdline = x) * [(ExpNetPTS_O\; | O\;Score, yrdline = x) - V_{100} ^ {form}] -
 $$
 $$
- Prob(D | yrdline = x) * [(-ExpPTS_O\; | D\;Score, yrdline = x) - V_k] + 
-$$
-
-$$
-[1 - Prob(O|yrdline = x) - Prob(D|yrdline=x)] * (ExpNetPts_O | Not\;TD,\;Not\;FG,yrdline = x)
+ Prob(D | yrdline = x) * [(ExpPTS_D\; | D\;Score, yrdline = x) - V_{100} ^ {form}] + 
 $$
 
-Similarly except replace $V_k$ with $V_{k} ^ {rec}(Method\;2)$.
+$$
+[1 - Prob(O|yrdline = x) - Prob(D|yrdline=x)] * (ExpNetPts_O | No\;TD,\;No\;FG,yrdline = x)
+$$

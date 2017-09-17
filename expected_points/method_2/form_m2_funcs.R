@@ -66,7 +66,7 @@ calc_form_m2 <- function(exp_pts_df, rsts_name = "Reset_Team_to_Score",
     summarise(enp_o_noscore_yd = mean(UQ(sym(nstr_name))))
     
   koff_df <- exp_pts_df %>%
-    filter(Follow_Kickoff == 1)
+    filter(Yfog == 0)
   
   ko_P_o <- koff_df %>%
     mutate(offense_score = ifelse(UQ(rsts_name) == 1, 1, 0)) %$%
@@ -94,15 +94,15 @@ calc_form_m2 <- function(exp_pts_df, rsts_name = "Reset_Team_to_Score",
   
   ko_enp_o_noscore_yd <- mean(ko_enp_o_noscore_yd[[nstr_name]])
   
-  V_k_rec <- (ko_P_o * ko_enp_o_oscore_yd +
+  (V_k_rec <- (ko_P_o * ko_enp_o_oscore_yd +
               ko_P_d * (ko_enp_o_dscore_yd) +
               (1 - ko_P_o - ko_P_d) * ko_enp_o_noscore_yd) /
-              (1 + ko_P_o - ko_P_d)
+              (1 + ko_P_o - ko_P_d))
   
   # Expected Net points naming
   seas_range = range(koff_df[[seas_name]])
   seas_range = glue(seas_range[1], "-", seas_range[2])
-  enp_name = glue("enp_fm2-{seas_range}")
+  enp_name = glue("enp_fm2_comp_{seas_range}")
   
   # Component naming
   po_name <- glue("comp_P_o_{seas_range}")
@@ -118,26 +118,26 @@ calc_form_m2 <- function(exp_pts_df, rsts_name = "Reset_Team_to_Score",
   ko_enpo_ds_name <- glue("comp_ko_enp_o_dscore_yd_{seas_range}")
   ko_enpo_os_name <- glue("comp_ko_enp_o_oscore_yd_{seas_range}")
   ko_enpo_ns_name <- glue("comp_ko_enp_o_nscore_yd_{seas_range}")
-  ko_V_k_m2 <- glue("comp_ko_V_k_rec_{seas_range}")
+  ko_V_k_m2 <- glue("enp_comp_ko_V_k_rec_{seas_range}")
   
   enp_eoh_vk_rec <- tibble(Yfog = 1:99,
                         !!enp_name := eys(P_o) * (eys(enp_o_oscore_yd) - 
-                         V_k_rec) +  eys(P_d) * (eys(enp_o_dscore_yd) + 
+                         V_k_rec) -  eys(P_d) * (-eys(enp_o_dscore_yd) - 
                          V_k_rec) + (1 - eys(P_o) - eys(P_d)) * 
                          (eys(enp_o_noscore_yd)),
                         !!po_name := eys(P_o),
                         !!pd_name := eys(P_d),
                         !!pn_name := eys(P_none),
-                        !!enpo_ds_name := eys(enp_o_dscore_yd),
                         !!enpo_os_name := eys(enp_o_oscore_yd),
+                        !!enpo_ds_name := eys(enp_o_dscore_yd),
                         !!enpo_ns_name := eys(enp_o_noscore_yd),
+                        !!ko_V_k_m2  := V_k_rec,
                         !!ko_po_name := ko_P_o,
                         !!ko_pd_name := ko_P_d,
                         !!ko_pn_name := ko_P_none,
-                        !!ko_enpo_ds_name := ko_enp_o_dscore_yd,
                         !!ko_enpo_os_name := ko_enp_o_oscore_yd,
-                        !!ko_enpo_ns_name := ko_enp_o_noscore_yd,
-                        !!ko_V_k_m2  := V_k_rec
+                        !!ko_enpo_ds_name := ko_enp_o_dscore_yd,
+                        !!ko_enpo_ns_name := ko_enp_o_noscore_yd
                        )
   enp_eoh_vk_rec
 }

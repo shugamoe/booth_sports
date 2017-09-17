@@ -40,20 +40,38 @@ EXP_SPLIT <- season_splits(EXP_DAT)
 
 precision_comp <- bind_rows(
   EXP_SPLIT %>%
-    map_df(~ calc_precision(.)),
+    map_df(~ calc_precision(., "Armchair_gid")),
   EXP_SPLIT %>%
     map_df(~ calc_precision(., "Half_num")),
   EXP_SPLIT %>%
     map_df(~ calc_precision(., "Drive_num")),
   EXP_SPLIT %>%
-    map_df(~ calc_precision(., "Armchair_gid"))
+    map_df(~ calc_precision(.))
 )
 
 precision_comp_csv <- precision_comp %>%
     transmute(split_and_cluster = glue("{Year}_{Cluster_var}"), 
               Yfog = Yfog,
               SE = SE) %>%
-spread(split_and_cluster, SE)
+  spread(split_and_cluster, SE) %>%
+  select(Yfog, 
+         `2000 - 2016_Armchair_gid`,
+         `2000 - 2016_Half_num`,
+         `2000 - 2016_Drive_num`,
+         `2000 - 2016_None`,
+         `2000 - 2010_Armchair_gid`,
+         `2000 - 2010_Half_num`,
+         `2000 - 2010_Drive_num`,
+         `2000 - 2010_None`,
+         `2011 - 2015_Armchair_gid`,
+         `2011 - 2015_Half_num`,
+         `2011 - 2015_Drive_num`,
+         `2011 - 2015_None`,
+         `2016_Armchair_gid`,
+         `2016_Half_num`,
+         `2016_Drive_num`,
+         `2016_None`
+         )
 
 write_csv(precision_comp_csv, "enp_rm1_se.csv")
 precision_comp <- within(precision_comp, Year <- 

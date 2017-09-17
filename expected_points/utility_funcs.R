@@ -4,6 +4,9 @@ library(tidyverse)
 library(purrr)
 
 EXP_DAT <- read.csv("../correc_raw_fdowns_nscore_half_and_reset.csv")
+EXP_DAT_WKO <- read.csv("../corec_raw_koff_nscore_half_and_reset.csv") %>%
+  mutate(Yfog = 0) %>%
+  bind_rows(EXP_DAT)
 
 season_splits <- function(exp_pts_df, seas_col = "Season"){
   require(tidyverse)
@@ -139,7 +142,7 @@ make_csv_dat <- function(raw_exp_dat, method_num, approach, components = F,
   
   if (components){
     csv_dat <- csv_dat %>%
-      select(matches("^comp|Yfog"))
+      select(matches("comp|Yfog"))
     comp <- "_comp"
   } else {
     csv_dat <- csv_dat %>%
@@ -147,6 +150,19 @@ make_csv_dat <- function(raw_exp_dat, method_num, approach, components = F,
     comp <- ""
   }
   
+  if (method_num == 2 && approach == "f" && !components){
+    new_csv_dat <- tibble(Yfog = 1:100,
+                         `enp_fm2_comp_2000-2016` = 
+                           c(csv_dat$`enp_fm2_comp_2000-2016`, mean(csv_dat$`enp_comp_ko_V_k_rec_2000-2016`)),
+                         `enp_fm2_comp_2000-2010` = 
+                           c(csv_dat$`enp_fm2_comp_2000-2010`, mean(csv_dat$`enp_comp_ko_V_k_rec_2000-2010`)),
+                         `enp_fm2_comp_2011-2015` = 
+                           c(csv_dat$`enp_fm2_comp_2011-2015`, mean(csv_dat$`enp_comp_ko_V_k_rec_2011-2015`)),
+                         `enp_fm2_comp_2016-2016` = 
+                           c(csv_dat$`enp_fm2_comp_2016-2016`, mean(csv_dat$`enp_comp_ko_V_k_rec_2016-2016`))
+    )
+    csv_dat <- new_csv_dat
+  }
   
   if (write){
       write.csv(csv_dat, glue("enp_{approach}m{method_num}{comp}.csv"),
@@ -176,7 +192,7 @@ make_plot_dat <- function(raw_exp_dat, method_num, approach, yfog_name = "Yfog",
     val_name <- glue("comp_{approach}m{method_num}")
   } else {
     enp_only <- plot_dat %>%
-      select(starts_with("enp"))
+      select(matches("^enp_[r|f]"))
     cols_of_int <- names(enp_only)
     val_name <- glue("enp_{approach}m{method_num}")
   }
@@ -205,6 +221,8 @@ cl   <- function(dat,fm, cluster){
 calc_precision <- function(data, cluster_var = character(0), method = "cl"){
   require(stringr)
   require(glue)
+  require(multiwayvcov)
+  
   model <- lm(Net_Score_to_Half ~ factor(Yfog) - 1, data = data)
   
   if (length(cluster_var) > 0){

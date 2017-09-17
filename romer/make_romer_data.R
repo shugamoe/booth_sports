@@ -16,9 +16,9 @@ library(rlang)
 # Situation 104: Safety 2016 (New Touchback Rule)
 
 # Read in raw data
-GAMES_DF <- read_csv('nfl_00_16/GAME.csv') %>%
+GAMES_DF <- read_csv('nfl_00_16_corrected/GAME.csv') %>%
   dplyr::select(gid, h, seas, wk)
-PLAYS_DF <- read_csv('nfl_00_16/PLAY.csv') %>%
+PLAYS_DF <- read_csv('nfl_00_16_corrected/PLAY.csv') %>%
  mutate(min_in_half = ifelse(qtr %in% c(2, 4), min + sec / 60,
                              ifelse(qtr %in% c(1,3),     # -100 shouldn't happen
                                     15 + min + sec / 60, -100)),
@@ -121,7 +121,9 @@ make_romer_data <- function(plays_df = PLAYS_DF, write){
                                       (ptsd_lead - ptso) - (ptso_lead - ptsd))),
            
            # Vars from exp points
-           Playoff = ifelse(wk >= 17, 1, 0)
+           Playoff = ifelse(seas == 2001, 
+                       ifelse(wk >= 18, 1, 0), 
+                       ifelse(wk >= 17, 1, 0))
            )
   
   # Calculate xi 

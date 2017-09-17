@@ -16,7 +16,7 @@ knitr::opts_chunk$set(message = FALSE, echo = FALSE)
 
 theme_set(theme_minimal())
 
-EXP_DAT <- read_csv("raw_fdowns_nscore_half_and_reset.csv")
+EXP_DAT <- read.csv("correc_raw_fdowns_nscore_half_and_reset.csv")
 
 filter_season <- function(data, seasons){
   data %>%
@@ -45,6 +45,7 @@ cl   <- function(dat,fm, cluster){
 
 ```{r}
 calc_precision <- function(data, cluster_var = character(0), method = "cl"){
+  require(stringr)
   model <- lm(Net_Score_to_Half ~ factor(Yfog) - 1, data = data)
   
   if (length(cluster_var) > 0){
@@ -55,12 +56,16 @@ calc_precision <- function(data, cluster_var = character(0), method = "cl"){
     }
   } else {
     se <- summary(model)$coefficients[, 2]
+    # if (length(se) == 96){
+    #   browser()
+    # }
     cluster_var <- "None"
   }
   
-  tibble(Year = rep(sprintf("%d-%d", min(data$Season), max(data$Season)), 99),
-         Yfog = 1:99,
-         Cluster_var = rep(cluster_var, 99),
+  yards <- as.numeric(str_extract(names(se), "[0-9]{1,2}"))
+  tibble(Year = rep(sprintf("%d-%d", min(data$Season), max(data$Season)), length(yards)),
+         Yfog = yards,
+         Cluster_var = rep(cluster_var, length(yards)),
          SE = se)
 }
 

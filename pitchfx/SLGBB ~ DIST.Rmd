@@ -1,0 +1,144 @@
+---
+title: "SLGBB ~ Distance"
+author: "Brad Woodfield"
+date: "June 1, 2017"
+output: pdf_document
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+require(multiwayvcov)
+require(psych)
+require(lattice)
+require(knitr)
+require(broom)
+require(ggplot2)
+require(data.table)
+require(sandwich)
+require(lmtest)
+require(scatterplot3d)
+require(rgl)
+require(Rcmdr)
+require(dplyr)
+memory.limit(size = 10000000)
+setwd("C:/Users/bradl/Documents/R/PitchFX")
+df <- read.csv("PitchFX_2016.csv")
+```
+
+```{r, include=FALSE}
+df2 <- subset(df, df$Include == 1)
+rm(df)
+df2_NoSAC <- subset(df2, df2$SAC_AB == 0)
+rm(df2)
+df2_PA <- subset(df2_NoSAC, df2_NoSAC$Fringe_AB == 0)
+rm(df2_NoSAC)
+attach(df2_PA)
+
+#calculate distance from center of strike zone (0,2.5)
+df2_PA <- mutate(df2_PA,
+                x_side = df2_PA$px^2,
+                z_side = (df2_PA$pz - 2.5)^2,
+                dist_from_center = (x_side+z_side)^.5,
+                dist_from_center2 = dist_from_center^2,
+                dist_from_center3 = dist_from_center^3
+                 )
+
+#remove intentional walks, pitchouts
+df2_PA <- filter(df2_PA, 
+ !pitch_type %in% 
+   c('IN','UN','PO','FO'))
+df2_PA <- df2_PA[complete.cases(df2_PA[,175]),]
+attach(df2_PA)
+```
+
+```{r P(Single), echo=FALSE}
+logit_single <- glm(formula = S_AB ~ dist_from_center:count + dist_from_center2:count + dist_from_center3:count 
+                    + count + FIP + Leverage + p_throws:stand + batter_name-1, family = binomial(link = "logit"), data = df2_PA)
+
+P_single <- tidy(logit_single)
+kable(P_single[c(1:12,438:473),], digits = 4, caption = "P(Single) Logit")
+
+setwd("C:/Users/bradl/OneDrive/Documents/Booth/First Year/Spring/BUS 33222 Sports Analytics/Project/Code/Distance")
+write.csv(file="P_single.csv", P_single)
+```
+```{r include=FALSE}
+rm(logit_single)
+```
+
+```{r P(Walk), echo=FALSE}
+logit_walk <- glm(formula = BB_AB ~ dist_from_center:count + dist_from_center2:count + dist_from_center3:count 
+                    + count + FIP + Leverage + p_throws:stand + batter_name-1, family = binomial(link = "logit"), data = df2_PA)
+
+P_walk <- tidy(logit_walk)
+kable(P_walk[c(1:12,438:473),], digits = 4, caption = "P(Walk) Logit")
+
+setwd("C:/Users/bradl/OneDrive/Documents/Booth/First Year/Spring/BUS 33222 Sports Analytics/Project/Code/Distance")
+write.csv(file="P_walk.csv", P_walk)
+```
+```{r include=FALSE}
+rm(logit_walk)
+```
+
+```{r P(Double), echo=FALSE}
+logit_double <- glm(formula = D_AB ~ dist_from_center:count + dist_from_center2:count + dist_from_center3:count 
+                    + count + FIP + Leverage + p_throws:stand + batter_name-1, family = binomial(link = "logit"), data = df2_PA)
+
+P_double <- tidy(logit_double)
+kable(P_double[c(1:12,438:473),], digits = 4, caption = "P(Double) Logit")
+
+setwd("C:/Users/bradl/OneDrive/Documents/Booth/First Year/Spring/BUS 33222 Sports Analytics/Project/Code/Distance")
+write.csv(file="P_double.csv", P_double)
+```
+```{r include=FALSE}
+rm(logit_double)
+```
+
+```{r P(Triple), echo=FALSE}
+logit_triple <- glm(formula = T_AB ~ dist_from_center:count + dist_from_center2:count + dist_from_center3:count 
+                    + count + FIP + Leverage + p_throws:stand + batter_name-1, family = binomial(link = "logit"), data = df2_PA)
+
+P_triple <- tidy(logit_triple)
+kable(P_triple[c(1:12,438:473),], digits = 4, caption = "P(Triple) Logit")
+
+setwd("C:/Users/bradl/OneDrive/Documents/Booth/First Year/Spring/BUS 33222 Sports Analytics/Project/Code/Distance")
+write.csv(file="P_triple.csv", P_triple)
+```
+```{r include=FALSE}
+rm(logit_triple)
+```
+
+```{r P(Homer), echo=FALSE}
+logit_homer <- glm(formula = HR_AB ~ dist_from_center:count + dist_from_center2:count + dist_from_center3:count 
+                    + count + FIP + Leverage + p_throws:stand + batter_name-1, family = binomial(link = "logit"), data = df2_PA)
+
+P_homer <- tidy(logit_homer)
+kable(P_homer[c(1:12,438:473),], digits = 4, caption = "P(Homer) Logit")
+
+setwd("C:/Users/bradl/OneDrive/Documents/Booth/First Year/Spring/BUS 33222 Sports Analytics/Project/Code/Distance")
+write.csv(file="P_homer.csv", P_homer)
+```
+```{r include=FALSE}
+rm(logit_homer)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

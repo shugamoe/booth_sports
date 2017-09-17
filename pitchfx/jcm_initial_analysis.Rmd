@@ -175,7 +175,7 @@ walked (BB). Constructed by simply adding the `BB_AB` column and the
 "Strikeout" and "Strikeout - DP" (the latter does not appear in the sample data,
 raises the question as to whether "Strikeout - TP" appears in larger data).
 
-#### `BIP_Out_AB` and its constituents
+#### `BIP_Out_AB` and its constituents **
 
 *Boolean* indicating a "Ball in Play Out At Bat". Is 1 only if there is no:
 
@@ -188,6 +188,8 @@ raises the question as to whether "Strikeout - TP" appears in larger data).
 `T_AB` (Triple)
 `HR_AB` (Home Run)
 `OB_AB` (On Base)
+
+**`SAC_AB` doesn't include "Sacrifice Bunt DP" but does include "Sac Fly DP".
 
 #### `<Event>_Pitch`
 

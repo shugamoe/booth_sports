@@ -1,0 +1,217 @@
+---
+title: "SLGBB | Count"
+author: "Brad Woodfield"
+date: "May 25, 2017"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+require(multiwayvcov)
+require(psych)
+require(lattice)
+require(knitr)
+require(broom)
+require(ggplot2)
+require(data.table)
+require(sandwich)
+require(lmtest)
+require(scatterplot3d)
+require(rgl)
+memory.limit(size = 150000)
+setwd("C:/Users/bradl/Documents/R/PitchFX")
+df <- read.csv("PitchFX_2016.csv")
+```
+
+
+```{r Subset Data, include=FALSE}
+df2 <- subset(df, df$Include == 1)
+rm(df)
+df2_NoSAC <- subset(df2, df2$SAC_AB == 0)
+rm(df2)
+df2_PA <- subset(df2_NoSAC, df2_NoSAC$Fringe_AB == 0)
+rm(df2_NoSAC)
+df2_AB <- subset(df2_PA, df2_PA$BB_AB == 0)
+attach(df2_PA)
+```
+
+#VF(Slugging Percentage + Walks)
+##Control for: Count, L/R Match-Up, FIP, Leverage, and Batter Fixed Effects
+```{r SLG+BB|Count}
+slgbb_Count_FIP <- lm(Total_Bases_BB_AB ~ count + p_throws*stand + FIP + batter_name + Leverage
+                  - stand - p_throws - 1)
+```
+```{r, echo=FALSE}
+results_slgbb_Count_FIP <- tidy(slgbb_Count_FIP, digits = 3)
+
+
+
+chart <- results_slgbb_Count_FIP[c(1:12),]
+chart$estimate <- round(chart$estimate, digits = 3)
+chart$balls <- c(0,0,0,1,1,1,2,2,2,3,3,3)
+chart$strikes<-c(0,1,2,0,1,2,0,1,2,0,1,2)
+
+attach(chart)
+  s3d <- scatterplot3d(x = balls,
+                     y = strikes,
+                     z = estimate,, type="h", highlight.3d=FALSE,
+      angle=240, scale.y=0.7, pch=16, main="VF(Slugging + Walks | Count)", color = "red", xlim = c(0,3), ylim = c(0,2),xlab = "Balls",ylab = "Strikes", zlab = "SLG + BB", x.ticklabs = c(0,"",1,"",2), y.ticklabs = c(3,"",2,"",1,"",0))
+    s3d.coords <- s3d$xyz.convert(balls, strikes, estimate) # convert 3D coords to 2D projection
+    text(s3d.coords$x, s3d.coords$y,             # x and y coordinates
+         labels=chart$estimate,              # text to plot
+         cex=.75, pos=3)           # shrink text 50% and place to right of points)
+
+
+
+```
+
+```{r,include=FALSE}
+# equivalent way: use the cluster.vcov function to get variance-covariance matrix
+attach(df2_PA)
+m1.vcovCL.2 <- cluster.vcov(slgbb_Count_FIP, df2_PA$AB_ID)
+
+setwd("C:/Users/bradl/OneDrive/Documents/Booth/First Year/Spring/BUS 33222 Sports Analytics/Project/Wald Testing/Count")
+write.csv(file="slgbb_Count.csv", m1.vcovCL.2)
+
+```
+
+\newpage
+```{r,echo=FALSE}
+kable(tidy(coeftest(slgbb_Count_FIP, m1.vcovCL.2))[c(1:12,438:440, 13, 437),],digits = 3, caption = "Slugging Pct and Walks")
+
+```
+
+
+\newpage
+#Single Pct
+```{r,echo=FALSE}
+Path_Model <- lm(S_AB ~ count + p_throws*stand + FIP + batter_name + Leverage
+                  - stand - p_throws - 1)
+
+
+m1.vcovCL.2 <- cluster.vcov(Path_Model, df2_PA$AB_ID)
+
+setwd("C:/Users/bradl/OneDrive/Documents/Booth/First Year/Spring/BUS 33222 Sports Analytics/Project/Wald Testing/Count")
+write.csv(file="single_Count.csv", m1.vcovCL.2)
+
+kable(tidy(coeftest(Path_Model, m1.vcovCL.2))[c(1:12,438:440, 13, 437),],digits = 3, caption = "Single Pct")
+```
+
+
+\newpage
+#Double Pct
+```{r,echo=FALSE}
+Path_Model <- lm(D_AB ~ count + p_throws*stand + FIP + batter_name + Leverage
+                  - stand - p_throws - 1)
+
+
+m1.vcovCL.2 <- cluster.vcov(Path_Model, df2_PA$AB_ID)
+
+setwd("C:/Users/bradl/OneDrive/Documents/Booth/First Year/Spring/BUS 33222 Sports Analytics/Project/Wald Testing/Count")
+write.csv(file="double_Count.csv", m1.vcovCL.2)
+
+kable(tidy(coeftest(Path_Model, m1.vcovCL.2))[c(1:12,438:440, 13, 437),],digits = 3, caption = "Double Pct")
+```
+
+
+
+\newpage
+#Triple Pct
+```{r,echo=FALSE}
+Path_Model <- lm(T_AB ~ count + p_throws*stand + FIP + batter_name + Leverage
+                  - stand - p_throws - 1)
+
+
+m1.vcovCL.2 <- cluster.vcov(Path_Model, df2_PA$AB_ID)
+
+setwd("C:/Users/bradl/OneDrive/Documents/Booth/First Year/Spring/BUS 33222 Sports Analytics/Project/Wald Testing/Count")
+write.csv(file="triple_Count.csv", m1.vcovCL.2)
+
+kable(tidy(coeftest(Path_Model, m1.vcovCL.2))[c(1:12,438:440, 13, 437),],digits = 3, caption = "Triple Pct")
+```
+
+
+
+\newpage
+#Home-Run Pct
+```{r,echo=FALSE}
+Path_Model <- lm(HR_AB ~ count + p_throws*stand + FIP + batter_name + Leverage
+                  - stand - p_throws - 1)
+
+
+m1.vcovCL.2 <- cluster.vcov(Path_Model, df2_PA$AB_ID)
+
+setwd("C:/Users/bradl/OneDrive/Documents/Booth/First Year/Spring/BUS 33222 Sports Analytics/Project/Wald Testing/Count")
+write.csv(file="homerun_Count.csv", m1.vcovCL.2)
+
+kable(tidy(coeftest(Path_Model, m1.vcovCL.2))[c(1:12,438:440, 13, 437),],digits = 3, caption = "Home-Run Pct")
+```
+
+
+\newpage
+#SLG Pct
+```{r,echo=FALSE}
+Path_Model <- lm(Total_Bases_AB ~ count + p_throws*stand + FIP + batter_name + Leverage
+                  - stand - p_throws - 1)
+
+
+m1.vcovCL.2 <- cluster.vcov(Path_Model, df2_PA$AB_ID)
+
+setwd("C:/Users/bradl/OneDrive/Documents/Booth/First Year/Spring/BUS 33222 Sports Analytics/Project/Wald Testing/Count")
+write.csv(file="homerun_Count.csv", m1.vcovCL.2)
+
+kable(tidy(coeftest(Path_Model, m1.vcovCL.2))[c(1:12,438:440, 13, 437),],digits = 3, caption = "SLG Pct")
+```
+
+
+\newpage
+#Walk Pct
+```{r,echo=FALSE}
+Path_Model <- lm(BB_AB ~ count + p_throws*stand + FIP + batter_name + Leverage
+                  - stand - p_throws - 1)
+
+
+m1.vcovCL.2 <- cluster.vcov(Path_Model, df2_PA$AB_ID)
+
+setwd("C:/Users/bradl/OneDrive/Documents/Booth/First Year/Spring/BUS 33222 Sports Analytics/Project/Wald Testing/Count")
+write.csv(file="walk_Count.csv", m1.vcovCL.2)
+
+kable(tidy(coeftest(Path_Model, m1.vcovCL.2))[c(1:12,438:440, 13, 437),],digits = 3, caption = "Walk Pct")
+```
+
+
+
+\newpage
+#Ball-In-Play Out Pct
+```{r,echo=FALSE}
+Path_Model <- lm(BIP_Out_AB ~ count + p_throws*stand + FIP + batter_name + Leverage
+                  - stand - p_throws - 1)
+
+
+m1.vcovCL.2 <- cluster.vcov(Path_Model, df2_PA$AB_ID)
+
+setwd("C:/Users/bradl/OneDrive/Documents/Booth/First Year/Spring/BUS 33222 Sports Analytics/Project/Wald Testing/Count")
+write.csv(file="BIPO_Count.csv", m1.vcovCL.2)
+
+kable(tidy(coeftest(Path_Model, m1.vcovCL.2))[c(1:12,438:440, 13, 437),],digits = 3, caption = "BIPO Pct")
+```
+
+
+
+
+
+\newpage
+#Strikeout Pct
+```{r,echo=FALSE}
+Path_Model <- lm(K_AB ~ count + p_throws*stand + FIP + batter_name + Leverage
+                  - stand - p_throws - 1)
+
+
+m1.vcovCL.2 <- cluster.vcov(Path_Model, df2_PA$AB_ID)
+
+setwd("C:/Users/bradl/OneDrive/Documents/Booth/First Year/Spring/BUS 33222 Sports Analytics/Project/Wald Testing/Count")
+write.csv(file="strikeout_Count.csv", m1.vcovCL.2)
+
+kable(tidy(coeftest(Path_Model, m1.vcovCL.2))[c(1:12,438:440, 13, 437),],digits = 3, caption = "Strikeout Pct")
+```
+
