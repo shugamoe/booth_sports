@@ -1,0 +1,37 @@
+---
+title: "Method 1 | Formula Approach"
+author: "Julian McClellan"
+date: "August 11th Data"
+output: pdf_document
+---
+
+```{r setup, include=T, echo=F, message=F, warning=F, fig.width=7.5, fig.height=10}
+source("../utility_funcs.R")
+library(tidyverse)
+library(ggplot2)
+theme_set(theme_minimal())
+
+knitr::opts_chunk$set(echo = F, warning = F, message = F)
+
+plot_dat <- make_plot_dat(EXP_DAT, 1, "f") %>%
+  mutate(full_or_not = ifelse(grepl("2000-2016", split), "", " "))
+csv_dat <- make_csv_dat(EXP_DAT, 1, "f")
+
+facet_names <- c("", "", "", "")
+names(facet_names) <- unique(plot_dat$split)
+
+(
+  ggplot(plot_dat) +
+  geom_line(aes(x = Yfog, y = enp_fm1, color = split)) +
+  labs(x = "Yards from Own Goal",
+       y = "Expected Net Points Until Half",
+       title = "Expected Net Points Until Half",
+       subtitle = "Formula Approach | Method 1",
+       color = "Season Split") +
+  scale_color_manual(labels = c("2000 - 2016", "2000 - 2010",
+                                "2011 - 2015", "2016"),
+                     values = c("red", "black", "blue", "green")) +
+  facet_grid(full_or_not ~ .)
+  # facet_wrap(~ split, labeller = as_labeller(facet_names))
+  )
+```

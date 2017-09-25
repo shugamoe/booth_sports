@@ -1,0 +1,195 @@
+---
+title: "Method 1 | Regression Approach"
+author: "Julian McClellan"
+date: "August 11th Data"
+output: pdf_document
+---
+
+```{r setup, include=T, message=F, warning=F, echo=F}
+source("../utility_funcs.R")
+library(tidyverse)
+library(ggplot2)
+library(glue)
+
+year_start <- 2000
+year_stop <- 2016
+
+source_dir <- "../"
+
+D_key = as_tibble(rbind(diag(1, 100, 100), 
+          diag(1, 100, 100),
+          diag(1, 100, 100)
+          )) %>%
+  set_names(paste0(rep("D_", 100), 1:100)) %>%
+  bind_cols(Yfog = rep(c(1:100), 3), Reset_Team_to_Score = c(rep(-1, 100), 
+                                                         rep(0, 100), 
+                                                         rep(1, 100)), .)
+
+FDOWN_EXP <- read.csv(glue(
+  "{source_dir}correc_raw_fdowns_nscore_half_and_reset.csv")) %>%
+  mutate(exp_type = "first_down") %>%
+  filter(Season >= year_start, Season <= year_stop)
+
+KOFF_EXP <- read.csv(
+  glue("{source_dir}corec_raw_koff_nscore_half_and_reset.csv")) %>%
+  mutate(exp_type = "kickoff",
+         Yfog = 100) %>%
+  filter(Season >= year_start, Season <= year_stop)
+
+PLAYS_DF <- read.csv("../../nfl_00_16_corrected/PLAY.csv")
+
+create_drive_num_key_single <- function(fpid, fpid_lead, uid){
+  tibble(Drive_num = rep(uid, fpid_lead - fpid),
+         Armchair_pid = fpid:(fpid_lead - 1))
+}
+
+
+DRIVE_KEY <- read_csv("../../nfl_00_16/DRIVE.csv") %>%
+  mutate(fpid_lead = lead(fpid, default = max(PLAYS_DF$pid))) %>%
+  dplyr::select(fpid, fpid_lead, uid) %>%
+  pmap_df(create_drive_num_key_single)
+
+
+
+rv_df <- bind_rows(FDOWN_EXP, KOFF_EXP) %>%
+  select(-matches("RUSH|PUNT|FGXP|CONV|PUNT|NOPL|KOFF|PASS|FGXP|ONSD|Armchair_dsq|Drive_num|Drive_start"),
+         -X) %>%
+  merge(D_key) %>%
+  merge(DRIVE_KEY, all.x = T)
+
+theme_set(theme_minimal())
+
+knitr::opts_chunk$set(echo = F, warning = F, message = F)
+
+plot_dat <- make_plot_dat(rv_df, 1, "r")
+csv_dat <- make_csv_dat(rv_df, 1, "r") # Full dat, stacked
+
+FDOWN_EXP <- FDOWN_EXP %>%
+  merge(D_key)
+
+KOFF_EXP <- KOFF_EXP %>%
+  merge(D_key)
+
+
+# Make M1_verify.csv
+fcsv_dat <- make_csv_dat(FDOWN_EXP, 1, "r", name = "fdown_only") # Fdown only
+kcsv_dat <- make_csv_dat(KOFF_EXP, 1, "r", name = "koff_only") %>%
+  mutate(Yfog = 100)
+
+fse_dat <- calc_precision(FDOWN_EXP, "Half_num") %>%
+  transmute(Yfog = Yfog,
+            `se_coef_verify_2000-2016` = SE)
+kse_dat <- calc_precision(KOFF_EXP, "Half_num") %>%
+  transmute(Yfog = 100,
+            `se_coef_verify_2000-2016` = SE)
+
+full_se <- bind_rows(fse_dat, kse_dat)
+
+# Koff only
+
+write.csv(bind_rows(fcsv_dat, kcsv_dat) %>%
+            merge(full_se) %>%
+            mutate(`coef_verify_2000-2016` = `enp_rm1-2000-2016`) %>%
+            select(Yfog,
+                   `coef_verify_2000-2016`,
+                   `se_coef_verify_2000-2016`), "M1_verify.csv", row.names = F)
+
+facet_names <- c("", "", "", "")
+names(facet_names) <- unique(plot_dat$split)
+
+plot_dat <- plot_dat %>%
+  mutate(full_or_not = ifelse(grepl("2000-2016", split), "", " "))
+
+(
+  ggplot(plot_dat) +
+  geom_line(aes(x = Yfog, y = enp_rm1, color = split)) +
+  labs(x = "Yards from Own Goal",
+       y = "Expected Net Points Until Half",
+       title = "Expected Net Points Until Half",
+       subtitle = "Regression Approach | Method 1",
+       color = "Season Split") +
+  scale_color_manual(labels = c("2000 - 2016", "2000 - 2010",
+                                "2011 - 2015", "2016"),
+                     values = c("red", "black", "blue", "green")) +
+  facet_grid(full_or_not ~ .)
+  )
+```
+
+
+```{r}
+EXP_SPLIT <- season_splits(rv_df %>%
+                             mutate(Yfog = ifelse(Yfog == 0, 100, Yfog)))
+
+precision_comp <- bind_rows(
+  EXP_SPLIT %>%
+    map_df(~ calc_precision(., "Armchair_gid")),
+  EXP_SPLIT %>%
+    map_df(~ calc_precision(., "Half_num")),
+  EXP_SPLIT %>%
+    map_df(~ calc_precision(., "Drive_num")),
+  EXP_SPLIT %>%
+    map_df(~ calc_precision(.))
+)
+
+precision_comp_csv <- precision_comp %>%
+    transmute(split_and_cluster = glue("{Year}_{Cluster_var}"), 
+              Yfog = Yfog,
+              SE = SE) %>%
+  spread(split_and_cluster, SE) %>%
+  select(Yfog, 
+         `2000 - 2016_Armchair_gid`,
+         `2000 - 2016_Half_num`,
+         `2000 - 2016_Drive_num`,
+         `2000 - 2016_None`,
+         `2000 - 2010_Armchair_gid`,
+         `2000 - 2010_Half_num`,
+         `2000 - 2010_Drive_num`,
+         `2000 - 2010_None`,
+         `2011 - 2015_Armchair_gid`,
+         `2011 - 2015_Half_num`,
+         `2011 - 2015_Drive_num`,
+         `2011 - 2015_None`,
+         `2016_Armchair_gid`,
+         `2016_Half_num`,
+         `2016_Drive_num`,
+         `2016_None`
+         )
+
+precision_add <- precision_comp %>%
+    transmute(split_and_cluster = glue("se_{Cluster_var}_{Year}"), 
+              Yfog = Yfog,
+              SE = SE) %>%
+  spread(split_and_cluster, SE) %>%
+  select(Yfog,
+         `se_Armchair_gid_2000 - 2016`,
+         `se_Drive_num_2000 - 2016`,
+         `se_Half_num_2000 - 2016`,
+         `se_None_2000 - 2016`,
+         `se_Half_num_2000 - 2010`,
+         `se_Half_num_2011 - 2015`,
+         `se_Half_num_2016`
+         )
+
+full_csv <- csv_dat %>%
+  merge(precision_add)
+
+names(full_csv) <- str_replace(names(full_csv), "enp_rm1-", "net_points")
+# write.csv(full_csv, "M1_regression.csv")
+
+# write_csv(precision_comp_csv, "enp_rm1_se.csv")
+precision_comp <- within(precision_comp, Year <- 
+                           factor(Year, levels = c("2000 - 2016", "2000 - 2010",
+                                                   "2011 - 2015", "2016")))
+
+(se_plot <- precision_comp %>%
+  ggplot(aes(Yfog, SE, color = Cluster_var)) +
+    geom_point(size = .1) +
+    labs(title = "Clustered Standard Error Comparison",
+         subtitle = "Different Seasons") + 
+    facet_wrap(~ Year))
+
+# Make m1_regression_99.csv
+inp_list <- list(year_start = c(2000, 2000, 2011, 2015),
+                 year_end = c(2016, 2010, 2015, 2016),
+                 clust = c(T, T, T, T))
+```

@@ -28,7 +28,7 @@ eys <- function(tidy_df){
 # For Expected Net Points until End of Half Using V_K
 
 # For Expected Net Points until End of Half using V_k recursive
-calc_form_m2 <- function(exp_pts_df, rsts_name = "Reset_Team_to_Score",
+calc_form_m2 <- function(exp_pts_df, vk_rec_only, rsts_name = "Reset_Team_to_Score",
                         nstr_name = "Net_Score_to_Reset",
                         fk_name = "Follow_Kickoff", seas_name = "Season"
 ){
@@ -102,15 +102,15 @@ calc_form_m2 <- function(exp_pts_df, rsts_name = "Reset_Team_to_Score",
   # Expected Net points naming
   seas_range = range(koff_df[[seas_name]])
   seas_range = glue(seas_range[1], "-", seas_range[2])
-  enp_name = glue("enp_fm2_comp_{seas_range}")
+  enp_name = glue("enp_comp_{seas_range}")
   
   # Component naming
   po_name <- glue("comp_P_o_{seas_range}")
   pd_name <- glue("comp_P_d_{seas_range}")
   pn_name <- glue("comp_P_n_{seas_range}")
-  enpo_ds_name <- glue("comp_enp_o_dscore_yd_{seas_range}")
-  enpo_os_name <- glue("comp_enp_o_oscore_yd_{seas_range}")
-  enpo_ns_name <- glue("comp_enp_o_nscore_yd_{seas_range}")
+  enpo_ds_name <- glue("comp_enp_d_{seas_range}")
+  enpo_os_name <- glue("comp_enp_o_{seas_range}")
+  enpo_ns_name <- glue("comp_enp_n_{seas_range}")
   
   ko_po_name <- glue("comp_ko_P_o_{seas_range}")
   ko_pd_name <- glue("comp_ko_P_d_{seas_range}")
@@ -118,7 +118,7 @@ calc_form_m2 <- function(exp_pts_df, rsts_name = "Reset_Team_to_Score",
   ko_enpo_ds_name <- glue("comp_ko_enp_o_dscore_yd_{seas_range}")
   ko_enpo_os_name <- glue("comp_ko_enp_o_oscore_yd_{seas_range}")
   ko_enpo_ns_name <- glue("comp_ko_enp_o_nscore_yd_{seas_range}")
-  ko_V_k_m2 <- glue("enp_comp_ko_V_k_rec_{seas_range}")
+  ko_V_k_m2 <- glue("enp_comp_ko_V_100_{seas_range}")
   
   enp_eoh_vk_rec <- tibble(Yfog = 1:99,
                         !!enp_name := eys(P_o) * (eys(enp_o_oscore_yd) - 
@@ -139,5 +139,9 @@ calc_form_m2 <- function(exp_pts_df, rsts_name = "Reset_Team_to_Score",
                         !!ko_enpo_ds_name := ko_enp_o_dscore_yd,
                         !!ko_enpo_ns_name := ko_enp_o_noscore_yd
                        )
-  enp_eoh_vk_rec
+  if (vk_rec_only){
+    V_k_rec
+  } else {
+    enp_eoh_vk_rec
+  }
 }

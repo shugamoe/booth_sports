@@ -4,17 +4,72 @@ author: "Julian McClellan"
 date: "August 11th Data"
 output: pdf_document
 ---
+# Expected Net Points
 
 ```{r setup, include=T, message=F, warning=F, echo=F}
-source("../utility_funcs.R")
 library(tidyverse)
 library(ggplot2)
+library(glue)
+
+all <- read.csv("M2_regression_all.csv")
+nn <- read.csv("M2_regression_99.csv")
+var <- read.csv("M2_regression_var.csv")
+
+v_iv <- nn %>%
+  select(v99_iv_clust_2000.2016,
+         v99_iv_clust_2000.2010,
+         v99_iv_clust_2011.2015)
+
+v_ols <- all %>%
+  select(v)
+
+year_start <- 2000
+year_stop <- 2016
+
+source_dir <- "../"
+
+D_key = as_tibble(rbind(diag(1, 100, 100), 
+          diag(1, 100, 100),
+          diag(1, 100, 100)
+          )) %>%
+  set_names(paste0(rep("D_", 100), 1:100)) %>%
+  bind_cols(Yfog = rep(c(1:99, 0), 3), Reset_Team_to_Score = c(rep(-1, 100), 
+                                                         rep(0, 100), 
+                                                         rep(1, 100)), .)
+
+FDOWN_EXP <- read.csv(glue(
+  "{source_dir}correc_raw_fdowns_nscore_half_and_reset.csv")) %>%
+  mutate(exp_type = "first_down") %>%
+  filter(Season >= year_start, Season <= year_stop)
+
+KOFF_EXP <- read.csv(
+  glue("{source_dir}corec_raw_koff_nscore_half_and_reset.csv")) %>%
+  mutate(exp_type = "kickoff") %>%
+  filter(Season >= year_start, Season <= year_stop)
+
+rv_df <- bind_rows(FDOWN_EXP, KOFF_EXP) %>%
+  select(-matches("RUSH|PUNT|FGXP|CONV|PUNT|NOPL|KOFF|PASS|FGXP|ONSD|Armchair_dsq|Drive_num|Drive_start"),
+         -X) %>%
+  mutate(Yfog = ifelse(is.na(Yfog), 0, Yfog)) %>%
+  merge(D_key)
+
 theme_set(theme_minimal())
 
 knitr::opts_chunk$set(echo = F, warning = F, message = F)
 
-plot_dat <- make_plot_dat(EXP_DAT, 1, "r")
-csv_dat <- make_csv_dat(EXP_DAT, 1, "r")
+plot_dat <- make_plot_dat(rv_df, 1, "r")
+csv_dat <- make_csv_dat(rv_df, 1, "r") # Full dat, stacked
+
+FDOWN_EXP <- FDOWN_EXP %>%
+  merge(D_key)
+
+KOFF_EXP <- KOFF_EXP %>%
+  merge(D_key)
+
+csv_dat <- make_csv_dat(FDOWN_EXP, 1, "r", name = "fdown_only") # Fdown only
+csv_dat <- make_csv_dat(KOFF_EXP, 1, "r", name = "koff_only") # Koff only
+
+
 
 facet_names <- c("", "", "", "")
 names(facet_names) <- unique(plot_dat$split)
@@ -36,7 +91,7 @@ names(facet_names) <- unique(plot_dat$split)
 
 
 ```{r}
-EXP_SPLIT <- season_splits(EXP_DAT)
+EXP_SPLIT <- season_splits(rv_df)
 
 precision_comp <- bind_rows(
   EXP_SPLIT %>%

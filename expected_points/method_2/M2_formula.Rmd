@@ -1,0 +1,339 @@
+---
+title: "Method 2 | Formula Approach"
+author: "Julian McClellan"
+date: "August 11th Data Used"
+output: 
+  pdf_document:
+    toc: true
+---
+
+
+# Expected Net Points
+
+```{r setup, include=T, message = F, warning = F, echo = F, fig.width=7.5, fig.height=10}
+knitr::opts_chunk$set(echo = F, message = F, warning = F)
+source("../utility_funcs.R")
+source("form_m2_funcs.R")
+theme_set(theme_minimal())
+
+plot_dat <- make_plot_dat(EXP_DAT_WKO, 2, "f") %>%
+  mutate(full_or_not = ifelse(grepl("2000-2016", split), "", " "))
+csv_dat <- make_csv_dat(EXP_DAT_WKO, 2, "f")
+
+
+(
+  ggplot(plot_dat) +
+  geom_line(aes(x = Yfog, y = enp_fm2, color = split)) +
+  labs(x = "Yards from Own Goal",
+       y = "Expected Net Points Until Half",
+       title = "Expected Net Points Until Half",
+       subtitle = "Formula Approach | Method 2",
+       color = "Season Split") +
+  scale_color_manual(labels = c("2000 - 2016", "2000 - 2010",
+                                "2011 - 2015", "2016"),
+                     values = c("red", "black", "blue", "green")) +
+  facet_grid(full_or_not ~ .)
+  )
+```
+
+# Components
+
+```{r components, fig.width=7.5, fig.height=10}
+components_plot_dat <- make_plot_dat(EXP_DAT_WKO, 2, "f", components = T) %>%
+  mutate(split = as.character(split),
+         full_or_not = ifelse(grepl("2000-2016", split), "", " "))
+components_csv_dat <- make_csv_dat(EXP_DAT_WKO, 2, "f", components = T)
+
+enp_dscore <- components_plot_dat %>%
+  filter(grepl("comp_enp_o_dscore", split))
+enp_oscore <- components_plot_dat %>%
+  filter(grepl("comp_enp_o_oscore", split))
+enp_noscore <- components_plot_dat %>%
+  filter(grepl("comp_enp_o_nscore", split))
+
+p_o <- components_plot_dat %>%
+  filter(grepl("comp_P_o", split))
+p_d <- components_plot_dat %>%
+  filter(grepl("comp_P_d", split))
+p_n <- components_plot_dat %>%
+  filter(grepl("comp_P_n", split))
+
+# Enp with offense scoring
+facet_names <- c("", "", "", "")
+names(facet_names) <- unique(enp_oscore$split)
+
+# Get order right
+enp_oscore <- within(enp_oscore, split <- 
+                           factor(split, levels = names(facet_names)))
+
+ggplot(enp_oscore) +
+geom_line(aes(x = Yfog, y = comp_fm2, color = split)) +
+labs(x = "Yards from Own Goal",
+     y = "Expected Net Points Until Half",
+     title = "Expected Net Points Until Half | Offense Scores TD/FG",
+     subtitle = "Formula Approach | Method 2",
+     color = "Season Split") +
+scale_color_manual(labels = c("2000 - 2016", "2000 - 2010",
+                              "2011 - 2015", "2016"),
+                   values = c("red", "black", "blue", "green")) + 
+facet_grid(full_or_not ~ .)
+```
+
+
+```{r, fig.width=7.5, fig.height=10}
+# Enp with defense scoring
+facet_names <- c("", "", "", "")
+names(facet_names) <- unique(enp_dscore$split)
+
+# Get order right
+enp_dscore <- within(enp_dscore, split <- 
+                           factor(split, levels = names(facet_names)))
+
+(
+  ggplot(enp_dscore) +
+  geom_line(aes(x = Yfog, y = comp_fm2, color = split)) +
+  labs(x = "Yards from Own Goal",
+       y = "Expected Net Points Until Half",
+       title = "Expected Net Points Until Half | Defense Scores TD/FG",
+       subtitle = "Formula Approach | Method 2",
+       color = "Season Split") +
+  scale_color_manual(labels = c("2000 - 2016", "2000 - 2010",
+                                "2011 - 2015", "2016"),
+                     values = c("red", "black", "blue", "green")) +
+  facet_grid(full_or_not ~ .)
+  )
+
+```
+
+```{r, fig.width=7.5, fig.height=10}
+# Enp with no one scoring
+facet_names <- c("", "", "", "")
+names(facet_names) <- unique(enp_noscore$split)
+
+# Get order right
+enp_noscore <- within(enp_noscore, split <- 
+                           factor(split, levels = names(facet_names)))
+
+(
+  ggplot(enp_noscore) +
+  geom_line(aes(x = Yfog, y = comp_fm2, color = split)) +
+  labs(x = "Yards from Own Goal",
+       y = "Expected Net Points Until Half",
+       title = "Expected Net Points Until Half | No One Scores TD/FG",
+       subtitle = "Formula Approach | Method 2",
+       color = "Season Split") +
+  scale_color_manual(labels = c("2000 - 2016", "2000 - 2010",
+                                "2011 - 2015", "2016"),
+                     values = c("red", "black", "blue", "green")) + 
+  facet_grid(full_or_not ~ .)
+  ) 
+```
+
+```{r, fig.width=7.5, fig.height=10}
+############################# 
+######### Probability #######
+#############################
+
+# P of offense scoring
+facet_names <- c("", "", "", "")
+names(facet_names) <- unique(p_o$split)
+
+# Get order right
+p_o <- within(p_o, split <- 
+                           factor(split, levels = names(facet_names)))
+
+(
+  ggplot(p_o) +
+  geom_line(aes(x = Yfog, y = comp_fm2, color = split)) +
+  labs(x = "Yards from Own Goal",
+       y = "Probability",
+       title = "Prob of Offense Scoring TD/FG Before Half",
+       subtitle = "Formula Approach | Method 2",
+       color = "Season Split") +
+  scale_color_manual(labels = c("2000 - 2016", "2000 - 2010",
+                                "2011 - 2015", "2016"),
+                     values = c("red", "black", "blue", "green")) + 
+  facet_grid(full_or_not ~ .) + 
+  coord_cartesian(ylim=c(0, 1))
+) 
+
+```
+
+```{r, fig.width=7.5, fig.height=10}
+# P of defense scoring
+facet_names <- c("", "", "", "")
+names(facet_names) <- unique(p_d$split)
+
+# Get order right
+p_d <- within(p_d, split <- 
+                           factor(split, levels = names(facet_names)))
+
+(
+  ggplot(p_d) +
+  geom_line(aes(x = Yfog, y = comp_fm2, color = split)) +
+  labs(x = "Yards from Own Goal",
+       y = "Probability",
+       title = "Prob of Defense Scoring TD/FG Before Half",
+       subtitle = "Formula Approach | Method 2",
+       color = "Season Split") +
+  scale_color_manual(labels = c("2000 - 2016", "2000 - 2010",
+                                "2011 - 2015", "2016"),
+                     values = c("red", "black", "blue", "green")) +
+  facet_grid(full_or_not ~ .) + 
+  coord_cartesian(ylim=c(0, 1))
+  ) 
+
+
+```
+
+```{r, fig.width=7.5, fig.height=10}
+# P of no one scoring
+facet_names <- c("", "", "", "")
+names(facet_names) <- unique(p_n$split)
+
+# Get order right
+p_n <- within(p_n, split <- 
+                           factor(split, levels = names(facet_names)))
+
+  ggplot(p_n) +
+  geom_line(aes(x = Yfog, y = comp_fm2, color = split)) +
+  labs(x = "Yards from Own Goal",
+       y = "Probability",
+       title = "Prob of No One Scoring TD/FG Before Half",
+       subtitle = "Formula Approach | Method 2",
+       color = "Season Split") +
+  scale_color_manual(labels = c("2000 - 2016", "2000 - 2010",
+                                "2011 - 2015", "2016"),
+                     values = c("red", "black", "blue", "green")) +
+  facet_grid(full_or_not ~ .) + 
+  coord_cartesian(ylim=c(0, 1))
+```
+
+# Non-Yfog Components Table
+
+```{r ko_table}
+library(knitr)
+KOFF <- EXP_DAT_WKO %>%
+  filter(Yfog == 0)
+
+koff_sample <- list(`2000-2016` = KOFF,
+               `2000-2010` = KOFF %>%
+                 filter(Season <= 2010),
+               `2011-2015` = KOFF %>%
+                 filter(Season >= 2011 & Season <= 2015),
+               `2016` = KOFF %>%
+                 filter(Season == 2016)
+)
+
+calc_prob_ko <- function(data, to_score, perct = FALSE){
+  if (to_score == "off"){
+    score_ind <- 1
+  } else if (to_score == "def"){
+    score_ind <- -1
+  } else if (to_score == "none"){
+    score_ind <- 0
+  }
+  frac <- data %>% 
+    mutate(o_koff = ifelse(Reset_Team_to_Score == score_ind, 1, 0)) %$%
+    mean(o_koff)
+  if (perct){
+    frac * 100
+  } else {
+    frac     
+  }
+}
+
+
+calc_enp_ko <- function(data, to_score, to = "reset"){
+  if (to_score == "off"){
+    score_ind <- 1
+  } else if (to_score == "def"){
+    score_ind <- -1
+  } else if (to_score == "none"){
+    score_ind <- 0
+  }
+  if (to == "reset"){
+  (points <- data %>%
+    filter(Reset_Team_to_Score == score_ind) %$%
+    mean(Net_Score_to_Reset))
+  } else if (to == "half"){
+  (points <- data %>%
+    filter(Reset_Team_to_Score == score_ind) %$%
+    mean(Net_Score_to_Half))
+  }
+}
+
+calc_vok_avg <- function(data){
+  data %$%
+    mean(Net_Score_to_Half)
+}
+
+calc_vok_rec <- function(data){
+  ko_P_o <- calc_prob_ko(data, "off")
+  ko_P_d <- calc_prob_ko(data, "def")
+  
+  ko_enp_o_oscore_yd <- calc_enp_ko(data, "off")
+  ko_enp_o_dscore_yd <- calc_enp_ko(data, "def")
+  ko_enp_o_noscore_yd <- calc_enp_ko(data, "none")
+  (V_k_rec <- (ko_P_o * ko_enp_o_oscore_yd +
+              ko_P_d * (ko_enp_o_dscore_yd) +
+              (1 - ko_P_o - ko_P_d) * ko_enp_o_noscore_yd) /
+              (1 + ko_P_o - ko_P_d))
+}
+
+calc_nobs_ko <- function(data, to_score){
+  if (to_score == "off"){
+    score_ind <- 1
+  } else if (to_score == "def"){
+    score_ind <- -1
+  } else if (to_score == "none"){
+    score_ind <- 0
+  } else if (to_score == "all"){
+    score_ind <- c(-1, 0, 1)
+  }
+  data %>%
+    filter(Reset_Team_to_Score %in% score_ind) %>%
+    nrow()
+}
+
+results <- tibble(sample = names(koff_sample),
+                  V_100_form = koff_sample %>% map(~calc_vok_rec(.)),
+                  PROBO_KO = koff_sample %>% map(~calc_prob_ko(., "off", TRUE)),
+                  PROBD_KO = koff_sample %>% map(~calc_prob_ko(., "def", TRUE)),
+                  PROBN_KO = koff_sample %>% map(~calc_prob_ko(., "none", TRUE)),
+                  ENPO_KO = koff_sample %>% map(~calc_enp_ko(., "off")),
+                  ENPD_KO = koff_sample %>% map(~calc_enp_ko(., "def")),
+                  ENPN_KO = koff_sample %>% map(~calc_enp_ko(., "none")),
+                  ExpNetPtsO_KO = koff_sample %>% map(~calc_enp_ko(., "off", to = "half")),
+                  ExpNetPtsD_KO = koff_sample %>% map(~calc_enp_ko(., "def", to = "half")),
+                  ExpNetPtsN_KO = koff_sample %>% map(~calc_enp_ko(., "none", to = "half")),
+                  nobs_ko_tot = koff_sample %>% map(~calc_nobs_ko(., "all")),
+                  nobso_ko = koff_sample %>% map(~calc_nobs_ko(., "off")),
+                  nobsd_ko = koff_sample %>% map(~calc_nobs_ko(., "def")),
+                  nobsn_ko = koff_sample %>% map(~calc_nobs_ko(., "none"))
+                  )
+
+kable(results[,1:8])
+kable(results[,9:11])
+kable(results[,12:15])
+```
+
+# Appendix: Variable Construction Formulas
+
+For $V_{100} ^ {form}$ all ExpPTS and Probs are conditional on a kickoff.
+
+$$
+V_{100} ^ {form} = \frac{Prob(O) * ExpPTS_O + Prob(D) * (ExpPTS_D) + 
+[1 - Prob(O) - Prob(D)] * ExpPTS_N}{1 + Prob(O) - Prob(D)}
+$$
+
+$$
+V(yrdline=x) = Prob(O\;|\; yrdline = x) * [(ExpNetPTS_O\; | O\;Score, yrdline = x) - V_{100} ^ {form}] -
+$$
+$$
+ Prob(D | yrdline = x) * [(ExpPTS_D\; | D\;Score, yrdline = x) - V_{100} ^ {form}] + 
+$$
+
+$$
+[1 - Prob(O|yrdline = x) - Prob(D|yrdline=x)] * (ExpNetPts_O | No\;TD,\;No\;FG,yrdline = x)
+$$
