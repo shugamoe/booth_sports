@@ -17,7 +17,8 @@ source("form_m2_funcs.R")
 theme_set(theme_minimal())
 
 plot_dat <- make_plot_dat(EXP_DAT_WKO, 2, "f") %>%
-  mutate(full_or_not = ifelse(grepl("2000-2016", split), "", " "))
+  mutate(full_or_not = ifelse(grepl("2000-2016", split), "", " ")) %>%
+  filter(grepl("^enp_comp_\\d", split))
 csv_dat <- make_csv_dat(EXP_DAT_WKO, 2, "f")
 
 
@@ -45,11 +46,11 @@ components_plot_dat <- make_plot_dat(EXP_DAT_WKO, 2, "f", components = T) %>%
 components_csv_dat <- make_csv_dat(EXP_DAT_WKO, 2, "f", components = T)
 
 enp_dscore <- components_plot_dat %>%
-  filter(grepl("comp_enp_o_dscore", split))
+  filter(grepl("comp_enp_d", split))
 enp_oscore <- components_plot_dat %>%
-  filter(grepl("comp_enp_o_oscore", split))
+  filter(grepl("comp_enp_o", split))
 enp_noscore <- components_plot_dat %>%
-  filter(grepl("comp_enp_o_nscore", split))
+  filter(grepl("comp_enp_n", split))
 
 p_o <- components_plot_dat %>%
   filter(grepl("comp_P_o", split))

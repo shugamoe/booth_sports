@@ -24,8 +24,7 @@ season_splits <- function(exp_pts_df, seas_col = "Season"){
 
 enp_m1 <- function(exp_pts, approach, seas_name = "Season", yfog_name = "Yfog",
                    nsth_name = "Net_Score_to_Half", source_dir = "../",
-                   model_only = F,
-                   ...){
+                   model_only = F){
   require(glue)
   require(tidyverse)
   require(purrr)
@@ -49,7 +48,7 @@ enp_m1 <- function(exp_pts, approach, seas_name = "Season", yfog_name = "Yfog",
     require(rlang)
     require(stringr)
     require(glue)
-    print("Hey, using this regression from John's new notes!")
+    # print("Hey, using this regression from John's new notes!")
     dep_var <- "Net_Score_to_Half"
     
     if (!(100 %in% unique(df$Yfog))){
@@ -92,15 +91,15 @@ enp_m1 <- function(exp_pts, approach, seas_name = "Season", yfog_name = "Yfog",
   } else if (startsWith(approach, "r")){
     calc_enp_func <- reg_app
   } else {
-    print("(f)ormula or (r)egression approach?")
+    # print("(f)ormula or (r)egression approach?")
     return()
   }
   
   if (class(exp_pts) == "list"){
     exp_pts %>%
-      map(~ calc_enp_func(., ...))
+      map(~ calc_enp_func(.))
   } else {
-    calc_enp_func(exp_pts, ...)
+    calc_enp_func(exp_pts)
   }
 }
 
@@ -153,8 +152,7 @@ make_m1_99 <- function(exp_pts, clust, year_start, year_end,
 }
 
 enp_m2 <- function(exp_pts, approach, seas_name = "Season", yfog_name = "Yfog",
-                   nsth_name = "Net_Score_to_Half",
-                   ...){
+                   nsth_name = "Net_Score_to_Half"){
   require(glue)
   require(tidyverse)
   require(purrr)
@@ -189,15 +187,15 @@ enp_m2 <- function(exp_pts, approach, seas_name = "Season", yfog_name = "Yfog",
   } else if (startsWith(approach, "r")){
     calc_enp_func <- reg_app
   } else {
-    print("(f)ormula or (r)egression approach?")
+    # print("(f)ormula or (r)egression approach?")
     return()
   }
   
   if (class(exp_pts) == "list"){
     (exp_pts %>%
-      map(~ calc_enp_func(., ...)))
+      map(~ calc_enp_func(.)))
   } else {
-    (calc_enp_func(exp_pts, ...))
+    (calc_enp_func(exp_pts))
   }
 }
 
@@ -262,8 +260,7 @@ make_csv_dat <- function(raw_exp_dat, method_num, approach, components = F,
 }
 
 make_plot_dat <- function(raw_exp_dat, method_num, approach, yfog_name = "Yfog",
-                          components = F,
-                          ...){
+                          components = F){
   require(tidyverse)
   require(magrittr)
   require(glue)
@@ -272,8 +269,10 @@ make_plot_dat <- function(raw_exp_dat, method_num, approach, yfog_name = "Yfog",
   
   plot_dat <- raw_exp_dat %>%
     season_splits() %>%
-    method_func(., approach, ...) %>%
+    method_func(., approach) %>%
     reduce(merge)
+  
+  # print("Plot dat created, filtering now.")
   
   if (components){
     comp_only <- plot_dat %>%
@@ -282,11 +281,10 @@ make_plot_dat <- function(raw_exp_dat, method_num, approach, yfog_name = "Yfog",
     val_name <- glue("comp_{approach}m{method_num}")
   } else {
     enp_only <- plot_dat %>%
-      select(matches("^enp_[r|f]"))
+      select(matches("^[enp_comp_2|enp_r|enp_f]"))
     cols_of_int <- names(enp_only)
     val_name <- glue("enp_{approach}m{method_num}")
   }
-  # browser()
   
   plot_dat %>%
     melt(id.var = yfog_name, variable.name = "split", measure.vars = cols_of_int,
@@ -352,6 +350,6 @@ calc_precision <- function(data, cluster_var = character(0)){
          Yfog = yards,
          Cluster_var = rep(cluster_var, length(yards)),
          SE = se)
-  print(dim(rt))
+  # print(dim(rt))
   rt
 }

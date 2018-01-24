@@ -11,6 +11,7 @@ library(tidyverse)
 library(ggplot2)
 library(glue)
 
+knitr::opts_chunk$set(echo = F, message = F, warning = F)
 year_start <- 2000
 year_stop <- 2016
 
@@ -59,7 +60,6 @@ rv_df <- bind_rows(FDOWN_EXP, KOFF_EXP) %>%
 
 theme_set(theme_minimal())
 
-knitr::opts_chunk$set(echo = F, warning = F, message = F)
 
 plot_dat <- make_plot_dat(rv_df, 1, "r")
 csv_dat <- make_csv_dat(rv_df, 1, "r") # Full dat, stacked
@@ -72,8 +72,8 @@ KOFF_EXP <- KOFF_EXP %>%
 
 
 # Make M1_verify.csv
-fcsv_dat <- make_csv_dat(FDOWN_EXP, 1, "r", name = "fdown_only") # Fdown only
-kcsv_dat <- make_csv_dat(KOFF_EXP, 1, "r", name = "koff_only") %>%
+fcsv_dat <- make_csv_dat(FDOWN_EXP, 1, "r") # Fdown only
+kcsv_dat <- make_csv_dat(KOFF_EXP, 1, "r") %>%
   mutate(Yfog = 100)
 
 fse_dat <- calc_precision(FDOWN_EXP, "Half_num") %>%
@@ -86,7 +86,6 @@ kse_dat <- calc_precision(KOFF_EXP, "Half_num") %>%
 full_se <- bind_rows(fse_dat, kse_dat)
 
 # Koff only
-
 write.csv(bind_rows(fcsv_dat, kcsv_dat) %>%
             merge(full_se) %>%
             mutate(`coef_verify_2000-2016` = `enp_rm1-2000-2016`) %>%
@@ -98,7 +97,8 @@ facet_names <- c("", "", "", "")
 names(facet_names) <- unique(plot_dat$split)
 
 plot_dat <- plot_dat %>%
-  mutate(full_or_not = ifelse(grepl("2000-2016", split), "", " "))
+  mutate(full_or_not = ifelse(grepl("2000-2016", split), "", " ")) %>%
+  filter(Yfog != 100)
 
 (
   ggplot(plot_dat) +
@@ -174,7 +174,7 @@ full_csv <- csv_dat %>%
   merge(precision_add)
 
 names(full_csv) <- str_replace(names(full_csv), "enp_rm1-", "net_points")
-# write.csv(full_csv, "M1_regression.csv")
+write.csv(full_csv, "M1_regression.csv")
 
 # write_csv(precision_comp_csv, "enp_rm1_se.csv")
 precision_comp <- within(precision_comp, Year <- 
@@ -188,7 +188,7 @@ precision_comp <- within(precision_comp, Year <-
          subtitle = "Different Seasons") + 
     facet_wrap(~ Year))
 
-# Make m1_regression_99.csv
+# Make M1_regression_99.csv
 inp_list <- list(year_start = c(2000, 2000, 2011, 2015),
                  year_end = c(2016, 2010, 2015, 2016),
                  clust = c(T, T, T, T))

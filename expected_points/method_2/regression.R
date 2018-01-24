@@ -161,26 +161,34 @@ run_m2_reg <- function(iv = T, clust = T, cluster_var = "Half_num",
   seas_range = range(data$Season)
   seas_range = glue(seas_range[1], "-", seas_range[2])
   
+  # If cluster_var is half num we want to avoid column name redundancy (see
+  # below)
+  if (cluster_var == "Half_num"){
+    cluster_var <-  "" 
+  } else {
+    cluster_var <- paste(cluster_var, "_")
+  }
+  
   rv_tibble_all <- tibble(
     #TODO(jcm) Looks like these glues have to be strings beforehand?
     Yfog = 1:100,
-    !!glue("v_{reg_type}_{clus_type}_{seas_range}") := coefficients(fm),
-    !!glue("se_v_{reg_type}_{clus_type}_{seas_range}") := se,
+    !!glue("v_{reg_type}_{clus_type}_{cluster_var}{seas_range}") := coefficients(fm),
+    !!glue("se_v_{reg_type}_{clus_type}_{cluster_var}{seas_range}") := se,
     !!glue("nobs_{seas_range}") := nobs$n)
   
   rv_tibble_99 <- tibble(
     !!glue("nobs_{seas_range}") := nobs$n[-100],
-    !!glue("v99_{reg_type}_{clus_type}_{seas_range}") := coefficients(fm)[-100],
-    !!glue("v100_{reg_type}_{clus_type}_{seas_range}") := coefficients(fm)[100],
-    !!glue("v_minus_{reg_type}_{clus_type}_{seas_range}") := coefficients(fm)[-100] - 
+    !!glue("v99_{reg_type}_{clus_type}_{cluster_var}{seas_range}") := coefficients(fm)[-100],
+    !!glue("v100_{reg_type}_{clus_type}_{cluster_var}{seas_range}") := coefficients(fm)[100],
+    !!glue("v_minus_{reg_type}_{clus_type}_{cluster_var}{seas_range}") := coefficients(fm)[-100] - 
       coefficients(fm)[100],
-    !!glue("se_v_minus_v100_{reg_type}_{clus_type}_{seas_range}") := se_sub_WHO,
-    !!glue("v_plus_v100_{reg_type}_{clus_type}_{seas_range}") := coefficients(fm)[-100] + 
+    !!glue("se_v_minus_v100_{reg_type}_{clus_type}_{cluster_var}{seas_range}") := se_sub_WHO,
+    !!glue("v_plus_v100_{reg_type}_{clus_type}_{cluster_var}{seas_range}") := coefficients(fm)[-100] + 
       coefficients(fm)[100],
-    !!glue("se_v_plus_v100_{reg_type}_{clus_type}_{seas_range}") := se_add_WHO,
-    !!glue("D_99_vars_{reg_type}_{clus_type}_{seas_range}") := D_vars,
-    !!glue("D_100_var_{reg_type}_{clus_type}_{seas_range}") := who_var,
-    !!glue("covars_{reg_type}_{clus_type}_{seas_range}") := wd_covars
+    !!glue("se_v_plus_v100_{reg_type}_{clus_type}_{cluster_var}{seas_range}") := se_add_WHO,
+    !!glue("D_99_vars_{reg_type}_{clus_type}_{cluster_var}{seas_range}") := D_vars,
+    !!glue("D_100_var_{reg_type}_{clus_type}_{cluster_var}{seas_range}") := who_var,
+    !!glue("covars_{reg_type}_{clus_type}_{cluster_var}{seas_range}") := wd_covars
   )
   
   rv_vars <- tibble(
@@ -189,9 +197,9 @@ run_m2_reg <- function(iv = T, clust = T, cluster_var = "Half_num",
     !!glue("resid_var_{seas_range}") := resid_var
   )
   
-  # write.csv(rv_tibble_all, glue("{source_dir}m2_all_{reg_type}_{clus_type}.csv"),
+  # write.csv(rv_tibble_all, glue("{source_dir}m2_all_{reg_type}_{clus_type}_{cluster_var}.csv"),
   #           row.names = F)
-  # write.csv(rv_tibble_99, glue("{source_dir}m2_99_{reg_type}_{clus_type}.csv"),
+  # write.csv(rv_tibble_99, glue("{source_dir}m2_99_{reg_type}_{clus_type}_{cluster_var}.csv"),
   #           row.names = F)
   
   if (all_or_nn == "all"){
@@ -310,6 +318,36 @@ main_b <- function(){
     !!glue("nobs_{seas_range}") := nobs$n[-100])
   
   write.csv(verify_tibble, "expected_points/method_2/M2_regression_verify.csv", row.names = F)
+}
+
+m2_regression_rmd <- function(){
+  g3_inp_list <- list(iv = c(T, T, T),
+         clust = c(T, T, F),
+         cluster_var = c("Armchair_gid", "Half_num", "Armchair_pid"),
+         source_dir = "expected_points/method_2/",
+         year_start = c(2000, 2000, 2000),
+         year_stop = c(2016, 2016, 2016),
+         all_or_nn = "all"
+     ) 
+  
+  g3_se <- g3_inp_list %>%
+      pmap(run_m2_reg) %>%
+      reduce(cbind)
+  write.csv(g3_se, "expected_points/method_2/M2_g3_se_99.csv", row.names = F)
+  # g4_inp_list <- list(iv = c(T, T, T),
+  #        clust = c(T, T, T),
+  #        cluster_var = c("Armchair_gid", "Half_num", "Armchair_pid"),
+  #        source_dir = "expected_points/method_2/",
+  #        year_start = c(2000, 2000, 2000),
+  #        year_stop = c(2016, 2016, 2016),
+  #        all_or_nn = "nn"
+  #    ) 
+  # g3_se <- g3_inp_list %>%
+  #     pmap(run_m2_reg) %>%
+  #     reduce(cbind) %>%
+  #     mutate(Yfog = 1:99) %>%
+  #     select(Yfog, everything())
+  # write.csv(nn, "expected_points/method_2/M2_g3_se_99.csv", row.names = F)
 }
 
 # comp_vals <- function(){

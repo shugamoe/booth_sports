@@ -1,142 +1,200 @@
 ---
-title: "Method 1 | Regression Approach"
+title: "Method 2 | Regression Approach"
 author: "Julian McClellan"
 date: "August 11th Data"
-output: pdf_document
+output: 
+  pdf_document:
+    toc: true
 ---
 # Expected Net Points
 
-```{r setup, include=T, message=F, warning=F, echo=F}
+```{r setup, include=T, message=F, warning=F, echo=F, fig.width=7.5, fig.height=10}
+knitr::opts_chunk$set(echo = F, message = F, warning = F, include = T)
 library(tidyverse)
 library(ggplot2)
+library(reshape2)
 library(glue)
+
+theme_set(theme_minimal())
 
 all <- read.csv("M2_regression_all.csv")
 nn <- read.csv("M2_regression_99.csv")
 var <- read.csv("M2_regression_var.csv")
 
+cols_of_int = c(
+        "v99_iv_clust_2000.2016",
+         "v99_iv_clust_2000.2010",
+         "v99_iv_clust_2011.2015",
+         "v99_iv_clust_2016.2016"
+         )
+
 v_iv <- nn %>%
   select(v99_iv_clust_2000.2016,
          v99_iv_clust_2000.2010,
-         v99_iv_clust_2011.2015)
+         v99_iv_clust_2011.2015,
+         v99_iv_clust_2016.2016
+         ) %>%
+  mutate(Yfog = 1:99) %>%
+  melt(id.var = "Yfog", variable.name = "split", measure.vars = cols_of_int,
+       value.name = "v99_iv")
 
-v_ols <- all %>%
-  select(v)
-
-year_start <- 2000
-year_stop <- 2016
-
-source_dir <- "../"
-
-D_key = as_tibble(rbind(diag(1, 100, 100), 
-          diag(1, 100, 100),
-          diag(1, 100, 100)
-          )) %>%
-  set_names(paste0(rep("D_", 100), 1:100)) %>%
-  bind_cols(Yfog = rep(c(1:99, 0), 3), Reset_Team_to_Score = c(rep(-1, 100), 
-                                                         rep(0, 100), 
-                                                         rep(1, 100)), .)
-
-FDOWN_EXP <- read.csv(glue(
-  "{source_dir}correc_raw_fdowns_nscore_half_and_reset.csv")) %>%
-  mutate(exp_type = "first_down") %>%
-  filter(Season >= year_start, Season <= year_stop)
-
-KOFF_EXP <- read.csv(
-  glue("{source_dir}corec_raw_koff_nscore_half_and_reset.csv")) %>%
-  mutate(exp_type = "kickoff") %>%
-  filter(Season >= year_start, Season <= year_stop)
-
-rv_df <- bind_rows(FDOWN_EXP, KOFF_EXP) %>%
-  select(-matches("RUSH|PUNT|FGXP|CONV|PUNT|NOPL|KOFF|PASS|FGXP|ONSD|Armchair_dsq|Drive_num|Drive_start"),
-         -X) %>%
-  mutate(Yfog = ifelse(is.na(Yfog), 0, Yfog)) %>%
-  merge(D_key)
-
-theme_set(theme_minimal())
-
-knitr::opts_chunk$set(echo = F, warning = F, message = F)
-
-plot_dat <- make_plot_dat(rv_df, 1, "r")
-csv_dat <- make_csv_dat(rv_df, 1, "r") # Full dat, stacked
-
-FDOWN_EXP <- FDOWN_EXP %>%
-  merge(D_key)
-
-KOFF_EXP <- KOFF_EXP %>%
-  merge(D_key)
-
-csv_dat <- make_csv_dat(FDOWN_EXP, 1, "r", name = "fdown_only") # Fdown only
-csv_dat <- make_csv_dat(KOFF_EXP, 1, "r", name = "koff_only") # Koff only
-
-
-
-facet_names <- c("", "", "", "")
-names(facet_names) <- unique(plot_dat$split)
+v_iv <- v_iv %>%
+  mutate(full_or_not = ifelse(grepl("2000.2016", split), "", " "))
 
 (
-  ggplot(plot_dat) +
-  geom_line(aes(x = Yfog, y = enp_rm1, color = split)) +
+  ggplot(v_iv) +
+  geom_line(aes(x = Yfog, y = v99_iv, color = split)) +
   labs(x = "Yards from Own Goal",
        y = "Expected Net Points Until Half",
        title = "Expected Net Points Until Half",
-       subtitle = "Regression Approach | Method 1",
+       subtitle = "Regression Approach IV | Method 2",
        color = "Season Split") +
   scale_color_manual(labels = c("2000 - 2016", "2000 - 2010",
                                 "2011 - 2015", "2016"),
-                     values = c("red", "black", "blue", "green")) # +
-  # facet_wrap(~ split, labeller = as_labeller(facet_names))
+                     values = c("red", "black", "blue", "green")) +
+  facet_grid(full_or_not ~ .)
   )
 ```
 
 
-```{r}
-EXP_SPLIT <- season_splits(rv_df)
+```{r, fig.width=7.5, fig.height=10}
+v_ols <- all %>%
+  select(v_ols_clust_2000.2016,
+         v_iv_clust_2000.2016)
 
-precision_comp <- bind_rows(
-  EXP_SPLIT %>%
-    map_df(~ calc_precision(., "Armchair_gid")),
-  EXP_SPLIT %>%
-    map_df(~ calc_precision(., "Half_num")),
-  EXP_SPLIT %>%
-    map_df(~ calc_precision(., "Drive_num")),
-  EXP_SPLIT %>%
-    map_df(~ calc_precision(.))
-)
+v_ols <- v_ols[-100,] %>% 
+  mutate(Yfog = 1:99) %>%
+  melt(id.var = "Yfog", variable.name = "split", measure.vars = 
+         c("v_ols_clust_2000.2016", "v_iv_clust_2000.2016"), value.name = "v99_iv_ols") %>%
+  mutate(iv_or_not = ifelse(grepl("iv", split), "", " "))
 
-precision_comp_csv <- precision_comp %>%
-    transmute(split_and_cluster = glue("{Year}_{Cluster_var}"), 
-              Yfog = Yfog,
-              SE = SE) %>%
-  spread(split_and_cluster, SE) %>%
-  select(Yfog, 
-         `2000 - 2016_Armchair_gid`,
-         `2000 - 2016_Half_num`,
-         `2000 - 2016_Drive_num`,
-         `2000 - 2016_None`,
-         `2000 - 2010_Armchair_gid`,
-         `2000 - 2010_Half_num`,
-         `2000 - 2010_Drive_num`,
-         `2000 - 2010_None`,
-         `2011 - 2015_Armchair_gid`,
-         `2011 - 2015_Half_num`,
-         `2011 - 2015_Drive_num`,
-         `2011 - 2015_None`,
-         `2016_Armchair_gid`,
-         `2016_Half_num`,
-         `2016_Drive_num`,
-         `2016_None`
-         )
-
-write_csv(precision_comp_csv, "enp_rm1_se.csv")
-precision_comp <- within(precision_comp, Year <- 
-                           factor(Year, levels = c("2000 - 2016", "2000 - 2010",
-                                                   "2011 - 2015", "2016")))
-
-(se_plot <- precision_comp %>%
-  ggplot(aes(Yfog, SE, color = Cluster_var)) +
-    geom_point(size = .1) +
-    labs(title = "Clustered Standard Error Comparison",
-         subtitle = "Different Seasons") + 
-    facet_wrap(~ Year))
+(
+  ggplot(v_ols) +
+  geom_line(aes(x = Yfog, y = v99_iv_ols, color = split)) +
+  labs(x = "Yards from Own Goal",
+       y = "Expected Net Points Until Half",
+       title = "Expected Net Points Until Half",
+       subtitle = "Regression Approach IV versus OLS | Method 2",
+       color = "IV or OLS") +
+  scale_color_manual(labels = c("2000 - 2016 OLS",
+                                "2000 - 2016 IV"),
+                     values = c("red", "black")) +
+  facet_grid(iv_or_not ~ .)
+  )
 ```
+
+# Standard Errors
+```{r fig.width=7.5, figh.height=5}
+cols_of_int = c(
+        "se_v_iv_clust_2000.2016",
+         "se_v_iv_clust_2000.2010",
+         "se_v_iv_clust_2011.2015",
+         "se_v_iv_clust_2016.2016"
+         )
+se_g1 <- all %>%
+  select(se_v_iv_clust_2000.2016,
+         se_v_iv_clust_2000.2010,
+         se_v_iv_clust_2011.2015,
+         se_v_iv_clust_2016.2016)
+
+se_g1 <- se_g1[-100, ] %>%
+  mutate(Yfog = 1:99) %>%
+  melt(id.var = "Yfog", variable.name = "split", measure.vars = cols_of_int,
+       value.name = "se_g1") %>%
+  mutate(full_or_not = ifelse(grepl("2000.2016", split), "", " "))
+
+(
+  ggplot(se_g1) +
+  geom_point(aes(x = Yfog, y = se_g1, color = split), size = .8) +
+  labs(x = "Yards from Own Goal",
+       y = "Standard Error",
+       title = "Standard Error | Method 2 Regression",
+       subtitle = "Subsample Comparison",
+       color = "Legend") +
+  scale_color_manual(labels = c("2000 - 2016 IV Half", "2000 - 2010 IV Half",
+                                "2011 - 2015 IV Half", "2016 IV Half"),
+                     values = c("red", "black", "blue", "green")) +
+  facet_grid(full_or_not ~ .)
+  )
+
+
+
+g3_inp_list <- list(iv = c(T, T, T),
+       clust = c(T, T, T),
+       cluster_var = c("Armchair_gid", "Half_num", "Armchair_pid"),
+       source_dir = "expected_points/method_2/",
+       year_start = c(2000, 2000, 2000),
+       year_stop = c(2016, 2016, 2016),
+       all_or_nn = "nn"
+   ) 
+
+
+# Only calling g3 and g4 because google spreadsheet notes list
+# them as separate graphs, however I think they should be together (g3 top, g4
+# bottom)
+
+for_table <- read.csv("M2_g3_se_99.csv")
+
+g3_cols <-c("se_v_iv_clust_Armchair_gid_2000.2016",
+         "se_v_iv_clust_Half_num_2000.2016",
+         "se_v_iv_no_clust_Armchair_pid_2000.2016") 
+
+g3_se <- read.csv("M2_g3_se_99.csv") %>%
+  select(se_v_iv_clust_Armchair_gid_2000.2016,
+         se_v_iv_clust_Half_num_2000.2016,
+         se_v_iv_no_clust_Armchair_pid_2000.2016) %>%
+  mutate(g3 = "") 
+g3_se <- g3_se[-100,] %>%
+  mutate(Yfog = 1:99) %>%
+  melt(id.var = "Yfog", variable.name = "split", measure.vars = g3_cols,
+       value.name = "g34_se") %>%
+  mutate(g3 = "") # For use in faceting
+
+g4_cols <- c("se_v_iv_clust_2000.2016", "se_v_ols_no_clust_2000.2016")
+
+g4_se <- all %>%
+  select(se_v_iv_clust_2000.2016,
+         se_v_ols_no_clust_2000.2016) 
+
+g4_se <- g4_se[-100,] %>% mutate(Yfog = 1:99) %>%
+  melt(id.var = "Yfog", variable.name = "split", measure.vars = g4_cols,
+       value.name = "g34_se") %>%
+  mutate(g3 = " ")
+
+g34_se <- rbind(g3_se, g4_se)
+
+(
+  ggplot(g34_se) +
+  geom_point(aes(x = Yfog, y = g34_se, color = split), size = .8, alpha = .5) +
+  labs(x = "Yards from Own Goal",
+       y = "Standard Error",
+       title = "Standard Error | Method 2 Regression",
+       subtitle = "IV versus OLS",
+       color = "Legend") +
+  scale_color_manual(labels = c("2000 - 2016 IV Game",
+                                "2000 - 2016 IV Half",
+                                "2000 - 2016 IV None",
+                                "2000 - 2016 IV Half",
+                                "2000 - 2016 OLS None"),
+                     values = c("black", "red", "green", "red", "purple")) +
+  facet_grid(g3 ~ .)
+  )
+```
+
+\newpage
+
+\begin{table}[]
+\centering
+\caption{v100}
+\label{my-label}
+\begin{tabular}{lllll}
+Technique & Cluster & years     & v100\_coef & v100\_se \\
+IV         &  half     &  2000-2016  & `r all$v_iv_clust_2000.2016[100]` &  `r all$se_v_iv_clust_2000.2016[100]`   \\
+IV         &  half     &  2000-2010  & `r all$v_iv_clust_2000.2010[100]` &  `r all$se_v_iv_clust_2000.2010[100]` \\
+IV         &  half     &  2011-2015  & `r all$v_iv_clust_2011.2015[100]` &  `r all$se_v_iv_clust_2011.2015[100]`         \\
+IV         &  half     &  2016       & `r all$v_iv_clust_2016.2016[100]` &  `r all$se_v_iv_clust_2016.2016[100]`          \\
+IV         &  none     &  2000-2016  & `r all$v_iv_no_clust_2000.2016[100]` &  `r all$se_v_iv_no_clust_2000.2016[100]`          \\
+IV         &  game     &  2000-2016  & `r for_table$v_iv_clust_Armchair_gid_2000.2016[100]` &  `r for_table$se_v_iv_clust_Armchair_gid_2000.2016[100]`          \\
+OLS        &  none     &  2000-2016  & `r all$v_ols_no_clust_2000.2016[100]` &  `r all$se_v_ols_no_clust_2000.2016[100]` 
+\end{tabular}
+\end{table}

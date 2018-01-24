@@ -28,7 +28,7 @@ eys <- function(tidy_df){
 # For Expected Net Points until End of Half Using V_K
 
 # For Expected Net Points until End of Half using V_k recursive
-calc_form_m2 <- function(exp_pts_df, vk_rec_only, rsts_name = "Reset_Team_to_Score",
+calc_form_m2 <- function(exp_pts_df, vk_rec_only = F, rsts_name = "Reset_Team_to_Score",
                         nstr_name = "Net_Score_to_Reset",
                         fk_name = "Follow_Kickoff", seas_name = "Season"
 ){
@@ -139,6 +139,8 @@ calc_form_m2 <- function(exp_pts_df, vk_rec_only, rsts_name = "Reset_Team_to_Sco
                         !!ko_enpo_ds_name := ko_enp_o_dscore_yd,
                         !!ko_enpo_ns_name := ko_enp_o_noscore_yd
                        )
+  
+  # print("calc_form_m2 returning!")
   if (vk_rec_only){
     V_k_rec
   } else {
