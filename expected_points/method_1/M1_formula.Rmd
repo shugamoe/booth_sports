@@ -12,10 +12,11 @@ library(ggplot2)
 theme_set(theme_minimal())
 
 knitr::opts_chunk$set(echo = F, warning = F, message = F)
-
 plot_dat <- make_plot_dat(EXP_DAT, 1, "f") %>%
   mutate(full_or_not = ifelse(grepl("2000-2016", split), "", " "))
-csv_dat <- make_csv_dat(EXP_DAT, 1, "f")
+csv_dat <- make_csv_dat(EXP_DAT_WKO, 1, "f") %>%
+  mutate(Yfog = ifelse(Yfog == 0, 100, Yfog)) %>%
+  arrange(Yfog)
 
 facet_names <- c("", "", "", "")
 names(facet_names) <- unique(plot_dat$split)
@@ -34,4 +35,13 @@ names(facet_names) <- unique(plot_dat$split)
   facet_grid(full_or_not ~ .)
   # facet_wrap(~ split, labeller = as_labeller(facet_names))
   )
+
+library(knitr)
+csv_dat <- csv_dat %>%
+  gather(Year, enp_ko, -Yfog) %>%
+  filter(Yfog == 100) %>%
+  mutate(Year = sub("enp_fm1_", "", Year))
+  
+kable(csv_dat %>%
+        select(-Yfog))
 ```

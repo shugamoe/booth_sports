@@ -78,7 +78,7 @@ v_ols <- v_ols[-100,] %>%
        color = "IV or OLS") +
   scale_color_manual(labels = c("2000 - 2016 OLS",
                                 "2000 - 2016 IV"),
-                     values = c("red", "black")) +
+                     values = c("black", "red")) +
   facet_grid(iv_or_not ~ .)
   )
 ```
@@ -176,7 +176,7 @@ g34_se <- rbind(g3_se, g4_se)
                                 "2000 - 2016 IV None",
                                 "2000 - 2016 IV Half",
                                 "2000 - 2016 OLS None"),
-                     values = c("black", "red", "green", "red", "purple")) +
+                     values = c("purple", "red", "orange", "red", "black")) +
   facet_grid(g3 ~ .)
   )
 ```

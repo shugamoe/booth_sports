@@ -86,12 +86,12 @@ kse_dat <- calc_precision(KOFF_EXP, "Half_num") %>%
 full_se <- bind_rows(fse_dat, kse_dat)
 
 # Koff only
-write.csv(bind_rows(fcsv_dat, kcsv_dat) %>%
-            merge(full_se) %>%
-            mutate(`coef_verify_2000-2016` = `enp_rm1-2000-2016`) %>%
-            select(Yfog,
-                   `coef_verify_2000-2016`,
-                   `se_coef_verify_2000-2016`), "M1_verify.csv", row.names = F)
+# write.csv(bind_rows(fcsv_dat, kcsv_dat) %>%
+#             merge(full_se) %>%
+#             mutate(`coef_verify_2000-2016` = `enp_rm1-2000-2016`) %>%
+#             select(Yfog,
+#                    `coef_verify_2000-2016`,
+#                    `se_coef_verify_2000-2016`), "M1_verify.csv", row.names = F)
 
 facet_names <- c("", "", "", "")
 names(facet_names) <- unique(plot_dat$split)
@@ -162,12 +162,21 @@ precision_add <- precision_comp %>%
   spread(split_and_cluster, SE) %>%
   select(Yfog,
          `se_Armchair_gid_2000 - 2016`,
-         `se_Drive_num_2000 - 2016`,
          `se_Half_num_2000 - 2016`,
+         `se_Drive_num_2000 - 2016`,
          `se_None_2000 - 2016`,
+         `se_Armchair_gid_2000 - 2010`,
          `se_Half_num_2000 - 2010`,
+         `se_Drive_num_2000 - 2010`,
+         `se_None_2000 - 2010`,
+         `se_Armchair_gid_2011 - 2015`,
          `se_Half_num_2011 - 2015`,
-         `se_Half_num_2016`
+         `se_Drive_num_2011 - 2015`,
+         `se_None_2011 - 2015`,
+         `se_Armchair_gid_2016`,
+         `se_Half_num_2016`,
+         `se_Drive_num_2016`,
+         `se_None_2016`
          )
 
 full_csv <- csv_dat %>%
@@ -180,8 +189,18 @@ write.csv(full_csv, "M1_regression.csv")
 precision_comp <- within(precision_comp, Year <- 
                            factor(Year, levels = c("2000 - 2016", "2000 - 2010",
                                                    "2011 - 2015", "2016")))
+# precision_comp <- within(precision_comp, Cluster_var <- 
+#                            factor(Cluster_var, levels = c("Armchair_gid", "Half",
+#                                                    "Drive", "None"), labels = 
+#                                                     c("Armchair_gid", "Half", "Drive", 
+#                                                       "None")))
+precision_comp$Cluster_var <- factor(precision_comp$Cluster_var, levels = c("Armchair_gid", "Half_num",
+                                                   "Drive_num", "None"), labels = 
+                                                    c("Armchair_gid", "Half", "Drive", 
+                                                      "None"))
 
 (se_plot <- precision_comp %>%
+    filter(Yfog != 100) %>%
   ggplot(aes(Yfog, SE, color = Cluster_var)) +
     geom_point(size = .1) +
     labs(title = "Clustered Standard Error Comparison",
@@ -192,4 +211,22 @@ precision_comp <- within(precision_comp, Year <-
 inp_list <- list(year_start = c(2000, 2000, 2011, 2015),
                  year_end = c(2016, 2010, 2015, 2016),
                  clust = c(T, T, T, T))
+
+# colnames(kcsv_dat) <- gsub("-", ".", colnames(kcsv_dat))
+
+years <- c("2000-2016", "2000-2010", "2000-2015", "2016")
+cluster <- c("Armchair GID", "Half", "Drive", "None")
+
+table_dat <- tibble(
+  Years = c(rep("2000-2016", 4), rep("2000-2010", 4), rep("2000-2015", 4), rep("2016", 4)),
+  cluster = rep(cluster, 4),
+  v100_coef = c(rep(kcsv_dat$`enp_rm1-2000-2016`[100], 4),
+                rep(kcsv_dat$`enp_rm1-2000-2010`[100], 4),
+                rep(kcsv_dat$`enp_rm1-2011-2015`[100], 4),
+                rep(kcsv_dat$`enp_rm1-2016-2016`[100], 4)),
+  v100_se = as.numeric(precision_comp_csv[100, -1])
+)
+
+library(knitr)
+kable(table_dat)
 ```
