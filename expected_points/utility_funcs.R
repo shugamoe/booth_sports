@@ -229,13 +229,13 @@ make_csv_dat <- function(raw_exp_dat, method_num, approach, components = F,
   if (method_num == 2 && approach == "f" && !components){
     new_csv_dat <- tibble(Yfog = 1:100,
                          `enp_comp_2000-2016` = 
-                           c(csv_dat$`enp_fm2_comp_2000-2016`, mean(csv_dat$`enp_comp_ko_V_k_rec_2000-2016`)),
+                           c(csv_dat$`enp_comp_2000-2016`, mean(csv_dat$`enp_comp_ko_V_100_2000-2016`)),
                          `enp_comp_2000-2010` = 
-                           c(csv_dat$`enp_fm2_comp_2000-2010`, mean(csv_dat$`enp_comp_ko_V_k_rec_2000-2010`)),
+                           c(csv_dat$`enp_comp_2000-2010`, mean(csv_dat$`enp_comp_ko_V_100_2000-2010`)),
                          `enp_comp_2011-2015` = 
-                           c(csv_dat$`enp_fm2_comp_2011-2015`, mean(csv_dat$`enp_comp_ko_V_k_rec_2011-2015`)),
+                           c(csv_dat$`enp_comp_2011-2015`, mean(csv_dat$`enp_comp_ko_V_100_2011-2015`)),
                          `enp_comp_2016-2016` = 
-                           c(csv_dat$`enp_fm2_comp_2016-2016`, mean(csv_dat$`enp_comp_ko_V_k_rec_2016-2016`))
+                           c(csv_dat$`enp_comp_2016-2016`, mean(csv_dat$`enp_comp_ko_V_100_2016-2016`))
     )
     csv_dat <- new_csv_dat
     names(csv_dat) <- str_replace(names(csv_dat), "_comp", "")

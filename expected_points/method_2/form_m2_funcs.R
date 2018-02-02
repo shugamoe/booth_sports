@@ -32,6 +32,7 @@ calc_form_m2 <- function(exp_pts_df, vk_rec_only = F, rsts_name = "Reset_Team_to
                         nstr_name = "Net_Score_to_Reset",
                         fk_name = "Follow_Kickoff", seas_name = "Season"
 ){
+  max_yard <- max(exp_pts_df$Yfog)
   require(rlang)
   require(magrittr)
   # Strings to symbols
@@ -48,7 +49,7 @@ calc_form_m2 <- function(exp_pts_df, vk_rec_only = F, rsts_name = "Reset_Team_to
     group_by(Yfog) %>%
     summarise(P_d = mean(defense_score))
   
-  P_none <- tibble(Yfog = 1:99, P_none = 1 - eys(P_o) - eys(P_d))
+  P_none <- tibble(Yfog = 1:max_yard, P_none = 1 - eys(P_o) - eys(P_d))
   
   enp_o_oscore_yd <- exp_pts_df %>%
     filter(UQ(rsts_name) == 1) %>%
@@ -120,7 +121,7 @@ calc_form_m2 <- function(exp_pts_df, vk_rec_only = F, rsts_name = "Reset_Team_to
   ko_enpo_ns_name <- glue("comp_ko_enp_o_nscore_yd_{seas_range}")
   ko_V_k_m2 <- glue("enp_comp_ko_V_100_{seas_range}")
   
-  enp_eoh_vk_rec <- tibble(Yfog = 1:99,
+  enp_eoh_vk_rec <- tibble(Yfog = 1:max_yard,
                         !!enp_name := eys(P_o) * (eys(enp_o_oscore_yd) - 
                          V_k_rec) -  eys(P_d) * (-eys(enp_o_dscore_yd) - 
                          V_k_rec) + (1 - eys(P_o) - eys(P_d)) * 
