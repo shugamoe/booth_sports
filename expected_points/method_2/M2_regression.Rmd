@@ -144,6 +144,12 @@ g3_se <- read.csv("M2_g3_se_99.csv") %>%
          se_v_iv_clust_Half_num_2000.2016,
          se_v_iv_no_clust_Armchair_pid_2000.2016) %>%
   mutate(g3 = "") 
+
+all <- all %>%
+  bind_cols(as_tibble(g3_se$se_v_iv_clust_Armchair_gid_2000.2016))
+
+write_csv(all, "M2_regression.csv")
+
 g3_se <- g3_se[-100,] %>%
   mutate(Yfog = 1:99) %>%
   melt(id.var = "Yfog", variable.name = "split", measure.vars = g3_cols,
