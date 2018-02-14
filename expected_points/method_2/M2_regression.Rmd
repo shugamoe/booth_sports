@@ -146,7 +146,8 @@ g3_se <- read.csv("M2_g3_se_99.csv") %>%
   mutate(g3 = "") 
 
 all <- all %>%
-  bind_cols(as_tibble(g3_se$se_v_iv_clust_Armchair_gid_2000.2016))
+  bind_cols(as_tibble(g3_se$se_v_iv_clust_Armchair_gid_2000.2016)) %>%
+  rename(se_v_iv_clust_gid_2000.2016 = value)
 
 write_csv(all, "M2_regression.csv")
 
